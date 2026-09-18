@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 from .pii_span import PIISpan
 
 
