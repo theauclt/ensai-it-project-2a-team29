@@ -1,6 +1,7 @@
 class PIISpan:
     """
-    blabla description
+    Représente une occurrence de PII détectée dans un document :
+    le texte trouvé, son type, sa position, et le détecteur d'origine.
     """
 
     def __init__(
