@@ -13,7 +13,7 @@ class RegexDetector(PIIDetector):
 
     PATTERNS = {  # noqa: RUF012
         "EMAIL": re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
-        "TELEPHONE": 
+        "TELEPHONE":
         re.compile(r"(?<!\d)(?:(?:\+33|0033)\s?[1-9]|0[1-9])(?:[\s.\-]?\d{2}){4}(?!\d)"),
         "NIR": re.compile(r"\b[12]\d{12}\b")
     }
@@ -24,6 +24,7 @@ class RegexDetector(PIIDetector):
         for pii_type, pattern in self.PATTERNS.items():
             # finditer scanne tout le contenu d'un coup et renvoie
             # un match pour chaque occurrence trouvée, avec sa position.
+            # finalement version sans split car pb de formats
             for match in pattern.finditer(content):
                 # !!! à tester!!!
                 spans.append(PIISpan(
