@@ -2,7 +2,7 @@ import re
 
 from ..service.interfaces.pii_detector import PIIDetector
 
-from ..service.interfaces.pii_span import PIISpan
+from ..service.business_objects.pii_span import PIISpan
 
 
 class RegexDetector(PIIDetector):

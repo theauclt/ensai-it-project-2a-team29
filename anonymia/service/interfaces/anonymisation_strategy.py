@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from .pii_span import PIISpan
+from ..business_objects.pii_span import PIISpan
 
 
 class AnonymisationStrategy(ABC):
