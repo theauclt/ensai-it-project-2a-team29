@@ -14,7 +14,7 @@ class RegexDetector(PIIDetector):
         "EMAIL": re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
         "TELEPHONE":
         re.compile(r"(?<!\d)(?:(?:\+33|0033)\s?[1-9]|0[1-9])(?:[\s.\-]?\d{2}){4}(?!\d)"),
-        "NIR": re.compile(r"\b[12]\d{12}\b"),
+        "NIR": re.compile(r"^[12]\s?\d{2}\s?(0[1-9]|1[0-2])\s?\d{2}\s?\d{3}\s?\d{3}$"),
         # IBAN : candidats plausibles, double verif necessaire
         "IBAN": re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b"),
         # format SIV actuel (depuis 2009) : AA-123-AA
@@ -83,6 +83,9 @@ class RegexDetector(PIIDetector):
                 if pii_type == "IBAN" and not self._is_valid_iban(match.group()):
                     continue
 
+                if pii_type == "NIR" and not self._is_valid_nir(match.group()):
+                    continue
+
                 spans.append(PIISpan(
                     text=match.group(),
                     type=pii_type,
@@ -91,6 +94,23 @@ class RegexDetector(PIIDetector):
                     source_detector="RegexDetector",
                 ))
         return spans
+
+    def _is_valid_nir(self, nir: str) -> bool:
+        """
+        Vérifie qu'un candidat trouvé par le regex est un nir plausible :
+        normalise le texte, vérifie sa longueur puis sa clé de contrôle.
+        """
+        nir = nir.replace(" ", "")
+
+        if not nir.isdigit() or len(nir) != 15:
+            return False
+
+        num = int(nir[:13])
+        cle = int(nir[13:])
+
+        cle_calculee = 97 - (num % 97)
+
+        return cle_calculee == cle
 
     def _is_valid_iban(self, candidate: str) -> bool:
         """
