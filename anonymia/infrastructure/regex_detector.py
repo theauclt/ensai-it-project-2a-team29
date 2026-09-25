@@ -102,8 +102,11 @@ class RegexDetector(PIIDetector):
         """
         nir = nir.replace(" ", "")
 
-        if not nir.isdigit() or len(nir) != 15:
+        if not nir.isdigit() or len(nir) != 15 or len(nir) != 13:
             return False
+
+        if len(nir) == 13:
+            return True
 
         num = int(nir[:13])
         cle = int(nir[13:])
