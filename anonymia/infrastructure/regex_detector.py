@@ -1,5 +1,7 @@
 import re
 
+import phonenumbers
+
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
 
@@ -13,7 +15,9 @@ class RegexDetector(PIIDetector):
     PATTERNS = {  # noqa: RUF012
         "EMAIL": re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
         "TELEPHONE":
-        re.compile(r"(?<!\d)(?:(?:\+33|0033)\s?[1-9]|0[1-9])(?:[\s.\-]?\d{2}){4}(?!\d)"),
+        # Regex inclusif pour capter tous les numéros potentiels
+        # Double verif avec phone numbers
+        re.compile(r"(?<!\d)(?:\+|00)?\d(?:[\s().-]*\d){7,14}(?!\d)"),
         "NIR": re.compile(r"^[12]\s?\d{2}\s?(0[1-9]|1[0-2])\s?\d{2}\s?\d{3}\s?\d{3}$"),
         # IBAN : candidats plausibles, double verif necessaire
         "IBAN": re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b"),
@@ -88,6 +92,9 @@ class RegexDetector(PIIDetector):
                 if pii_type == "NIR" and not self._is_valid_nir(match.group()):
                     continue
 
+                if pii_type == "TELEPHONE" and not self._is_valid_phonenumber(match.group()):
+                    continue
+
                 spans.append(PIISpan(
                     text=match.group(),
                     type=pii_type,
@@ -140,24 +147,28 @@ class RegexDetector(PIIDetector):
         # la longueur est bonne : reste à vérifier la clé de contrôle mathématique
         return self._checksum_valid(iban)
 
+    def _checksum_valid(self, iban: str) -> bool:
+        """
+        Vérifie la clé de contrôle d'un IBAN selon la norme ISO 7064 (modulo 97).
+        """
+        # étape 1 de la norme : déplacer les 4 premiers caractères
+        # (code pays + clé de contrôle) à la fin de la chaîne
+        rearranged = iban[4:] + iban[:4]
 
-def _checksum_valid(self, iban: str) -> bool:
-    """
-    Vérifie la clé de contrôle d'un IBAN selon la norme ISO 7064 (modulo 97).
-    """
-    # étape 1 de la norme : déplacer les 4 premiers caractères
-    # (code pays + clé de contrôle) à la fin de la chaîne
-    rearranged = iban[4:] + iban[:4]
+        # étape 2 : remplacer chaque lettre par sa valeur numérique (A=10, B=11, ..., Z=35)
+        # int(char, 36) interprète le caractère comme un chiffre en base 36 :
+        # les chiffres 0-9 restent inchangés, les lettres A-Z deviennent 10-35
+        # les chiffres restent des chiffres, donc on les laisse tels quels (str(...) sinon)
+        converted = "".join(
+            str(int(char, 36)) if char.isalpha() else char
+            for char in rearranged
+        )
 
-    # étape 2 : remplacer chaque lettre par sa valeur numérique (A=10, B=11, ..., Z=35)
-    # int(char, 36) interprète le caractère comme un chiffre en base 36 :
-    # les chiffres 0-9 restent inchangés, les lettres A-Z deviennent 10-35
-    # les chiffres restent des chiffres, donc on les laisse tels quels (str(...) sinon)
-    converted = "".join(
-        str(int(char, 36)) if char.isalpha() else char
-        for char in rearranged
-    )
+        # étape 3 : le grand nombre obtenu doit être congruent à 1 modulo 97
+        # sinon la clé de contrôle est invalide, l'IBAN n'existe pas
+        return int(converted) % 97 == 1
 
-    # étape 3 : le grand nombre obtenu doit être congruent à 1 modulo 97
-    # sinon la clé de contrôle est invalide, l'IBAN n'existe pas
-    return int(converted) % 97 == 1
+    def _is_valid_phonenumber(self, phonenumber: str) -> bool:
+        phonenumber = re.sub(r"[\s().-]", "", phonenumber)
+        parsed_number = phonenumbers.parse(phonenumber, None)
+        return phonenumbers.is_valid_number(parsed_number)
