@@ -21,6 +21,8 @@ class RegexDetector(PIIDetector):
         "PLAQUE_ACTUELLE": re.compile(r"\b[A-Z]{2}-\d{3}-[A-Z]{2}\b"),
         # ancien format FNI (avant 2009) : 1234 AB 75 (1 à 4 chiffres, 2-3 lettres, département)
         "PLAQUE_ANCIENNE": re.compile(r"\b\d{1,4}\s?[A-Z]{2,3}\s?\d{2,3}\b"),
+        # format plaques diplomatiques françaises
+        "PLAQUE_DIPLOMATIQUE": re.compile(r"\b(?:[UES]\s?)?\d{1,3}\s?(?:CMD|CD|C|K)\s?\d{1,4}(?:\.\d{2,3})?(?:\s?\d{2,3})?(?:\s?[XZ])?\b"),
     }
 
     # longueur exacte attendue par pays, pour la validation IBAN 
