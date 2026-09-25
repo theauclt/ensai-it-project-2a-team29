@@ -145,7 +145,6 @@ class RegexDetector(PIIDetector):
         # la longueur est bonne : reste à vérifier la clé de contrôle mathématique
         return self._checksum_valid(iban)
 
-
     def _checksum_valid(self, iban: str) -> bool:
         """
         Vérifie la clé de contrôle d'un IBAN selon la norme ISO 7064 (modulo 97).
