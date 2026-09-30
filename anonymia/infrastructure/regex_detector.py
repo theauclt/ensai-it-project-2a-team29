@@ -29,7 +29,7 @@ class RegexDetector(PIIDetector):
         "PLAQUE_DIPLOMATIQUE": re.compile(r"\b(?:[UES]\s?)?\d{1,3}\s?(?:CMD|CD|C|K)\s?\d{1,4}(?:\.\d{2,3})?(?:\s?\d{2,3})?(?:\s?[XZ])?\b"),
     }
 
-    # longueur exacte attendue par pays, pour la validation IBAN 
+    # longueur exacte attendue par pays, pour la validation IBAN
     IBAN_LENGTHS = {  # noqa: RUF012
         "DE": 22,
         "AD": 24,
