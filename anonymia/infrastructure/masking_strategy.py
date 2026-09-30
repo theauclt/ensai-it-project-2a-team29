@@ -25,7 +25,3 @@ class MaskingStrategy(AnonymisationStrategy):
             mask_count[span.type] += 1
             content = content[:span.start] + mask + content[span.end:]
             return content
-
-
-
-
