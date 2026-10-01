@@ -9,4 +9,5 @@ class LLMDetector(PIIDetector):
     """
     
     async def detect(self, content: str) -> list[PIISpan]:
-        #blabla
+        # blabla
+        pass
