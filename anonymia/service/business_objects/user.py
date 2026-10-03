@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 class User:
     """
     Représente un compte utilisateur d'Anonymia.
@@ -13,10 +16,14 @@ class User:
         id: str,
         login: str,
         password_hash: str,
-        role: str
+        role: str,
+        est_active: bool = True,
+        date_creation: datetime | None = None,
     ):
         """Constructor"""
         self.id = id
         self.login = login
         self.password_hash = password_hash
         self.role = role
+        self.est_active = est_active
+        self.date_creation = date_creation
