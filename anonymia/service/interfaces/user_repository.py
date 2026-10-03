@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 
-from business_object.user import User
+from ..business_objects.user import User
 
 
 class UserRepository(ABC):
     """
-    Contrat commun à tous les détecteurs de PII.
-    Une classe conforme doit savoir détecter les PII présentes
-    dans un texte et renvoyer une liste de PIISpan.
+    Contrat commun aux implémentations de persistance des utilisateurs.
+    Une classe conforme doit savoir rechercher un utilisateur à partir
+    de son login.
     """
     @abstractmethod
-    def find_by_login(self, login: str) -> User | None:
+    async def find_by_login(self, login: str) -> User | None:
         """
         Recherche un utilisateur à partir de son login.
 

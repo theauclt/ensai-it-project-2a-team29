@@ -1,6 +1,6 @@
 from ..service.business_objects.audit_entry import AuditEntry
 from ..service.interfaces.archive_repository import ArchiveRepository
-from .db_connexion import DBConnection
+from ..dao.db_connexion import DBConnection
 
 
 class PostgresArchiveRepository(ArchiveRepository):
