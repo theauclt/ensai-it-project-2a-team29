@@ -1,7 +1,7 @@
 import bcrypt
 
-from ..business_objects.user import User
-from ..interfaces.user_repository import UserRepository
+from .business_objects.user import User
+from .interfaces.user_repository import UserRepository
 
 
 class AuthentificationService:
