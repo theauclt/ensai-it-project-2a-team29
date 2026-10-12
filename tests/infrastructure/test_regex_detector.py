@@ -69,11 +69,6 @@ async def test_detect_plaque_actuelle(detector):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="bug connu : _is_valid_nir renvoie toujours False "
-    "(condition len(nir) != 15 or len(nir) != 13 toujours vraie)",
-    strict=True,
-)
 async def test_detect_nir_valide(detector):
     # NIR construit avec une cle de controle correcte (modulo 97)
     result = await detector.detect("Numero de secu : 195057800604825")
@@ -188,11 +183,6 @@ async def test_detect_email_incomplet_ignore(detector, texte):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="bug connu : le [\\w.-]+ final du regex EMAIL avale le point "
-    "qui termine la phrase (renvoie 'test@example.com.')",
-    strict=True,
-)
 async def test_detect_email_point_final_exclu(detector):
     result = await detector.detect("Ecrivez a test@example.com.")
 
@@ -243,12 +233,6 @@ async def test_detect_telephone_invalide_ignore(detector):
         "0612345678",
         "0033 6 12 34 56 78",
     ],
-)
-@pytest.mark.xfail(
-    reason="bug connu : les formats francais sans '+' (cf. Detection PII) "
-    "ne sont jamais valides car parse(..., None) n'a pas de region par defaut "
-    "(utiliser la region 'FR')",
-    strict=True,
 )
 async def test_detect_telephone_francais_national(detector, numero):
     result = await detector.detect(f"Mon numero : {numero}")
@@ -324,11 +308,6 @@ async def test_detect_iban_longueur_incorrecte_ignore(detector):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="bug connu : le regex IBAN ne capte pas les IBAN ecrits avec des "
-    "espaces, alors que _is_valid_iban sait les normaliser",
-    strict=True,
-)
 async def test_detect_iban_avec_espaces(detector):
     result = await detector.detect(
         "IBAN : FR76 3000 6000 0112 3456 7890 189 pour le virement"
@@ -345,13 +324,6 @@ async def test_detect_iban_avec_espaces(detector):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="bugs connus : (1) le regex NIR est ancre par ^...$ donc ne trouve "
-    "rien au milieu d'une phrase, (2) il ne capte pas la cle (13 chiffres "
-    "seulement), (3) _is_valid_nir renvoie toujours False, (4) le NIR est aussi "
-    "candidat TELEPHONE et plante via _is_valid_phonenumber",
-    strict=True,
-)
 async def test_detect_nir_valide_avec_espaces(detector):
     result = await detector.detect("Numero de secu : 1 95 05 78 006 048 25")
 
@@ -391,11 +363,6 @@ async def test_detect_plusieurs_plaques_actuelles(detector):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("plaque", ["AB 123 CD", "AB123CD"])
-@pytest.mark.xfail(
-    reason="ecart avec Detection PII : le regex PLAQUE_ACTUELLE n'accepte que "
-    "le format avec tirets (prevu : [\\s-]? entre les groupes)",
-    strict=True,
-)
 async def test_detect_plaque_actuelle_autres_ecritures(detector, plaque):
     result = await detector.detect(f"Vehicule immatricule {plaque}")
 
@@ -415,11 +382,6 @@ async def test_detect_plaque_ancienne(detector, plaque):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="ecart avec Detection PII : le departement 2A/2B (Corse) n'est "
-    "pas gere par le regex PLAQUE_ANCIENNE",
-    strict=True,
-)
 async def test_detect_plaque_ancienne_corse(detector):
     result = await detector.detect("Vehicule immatricule 12 AB 2A")
 
@@ -459,3 +421,27 @@ async def test_detect_plaque_diplomatique_chevauche_plaque_ancienne(detector):
         "PLAQUE_DIPLOMATIQUE",
     }
     assert {(span.start, span.end) for span in result} == {(21, 30)}
+
+
+@pytest.mark.asyncio
+async def test_detect_iban_avec_espaces_suivi_d_un_mot_majuscule(detector):
+    result = await detector.detect("IBAN : FR76 3000 6000 0112 3456 7890 189 POUR")
+
+    assert len(result) == 1
+    assert result[0].type == "IBAN"
+    assert result[0].text == "FR76 3000 6000 0112 3456 7890 189"
+    assert result[0].end == result[0].start + len(result[0].text)
+
+
+@pytest.mark.asyncio
+async def test_detect_nir_corse(detector):
+    # NIR corse (2A) : la cle se calcule en remplacant 2A par 19
+    base = int("19505" + "19" + "006048")
+    cle = 97 - (base % 97)
+    texte = f"195052A006048{cle:02d}"
+
+    result = await detector.detect(f"Numero de secu : {texte}")
+
+    assert len(result) == 1
+    assert result[0].type == "NIR"
+    assert result[0].text == texte

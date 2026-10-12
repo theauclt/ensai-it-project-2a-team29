@@ -13,18 +13,18 @@ class RegexDetector(PIIDetector):
     """
 
     PATTERNS = {  # noqa: RUF012
-        "EMAIL": re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
+        "EMAIL": re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"),
         "TELEPHONE":
         # Regex inclusif pour capter tous les numéros potentiels
         # Double verif avec phone numbers
-        re.compile(r"(?<!\d)(?:\+|00)?\d(?:[\s().-]*\d){7,14}(?!\d)"),
-        "NIR": re.compile(r"^[12]\s?\d{2}\s?(0[1-9]|1[0-2])\s?\d{2}\s?\d{3}\s?\d{3}$"),
+        re.compile(r"(?<!\w)(?:\+|00)?\d(?:[\s().-]*\d){7,14}(?!\w)"),
+        "NIR": re.compile(r"(?<!\d)[12]\s?\d{2}\s?(?:0[1-9]|1[0-2])\s?(?:\d{2}|2[AB])\s?\d{3}\s?\d{3}(?:\s?\d{2})?(?!\d)"),
         # IBAN : candidats plausibles, double verif necessaire
-        "IBAN": re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b"),
+        "IBAN": re.compile(r"\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){2,7}(?:\s?[A-Z0-9]{1,4})?\b"),
         # format SIV actuel (depuis 2009) : AA-123-AA
-        "PLAQUE_ACTUELLE": re.compile(r"\b[A-Z]{2}-\d{3}-[A-Z]{2}\b"),
+        "PLAQUE_ACTUELLE": re.compile(r"\b[A-Z]{2}[\s-]?\d{3}[\s-]?[A-Z]{2}\b"),
         # ancien format FNI (avant 2009) : 1234 AB 75 (1 à 4 chiffres, 2-3 lettres, département)
-        "PLAQUE_ANCIENNE": re.compile(r"\b\d{1,4}\s?[A-Z]{2,3}\s?\d{2,3}\b"),
+        "PLAQUE_ANCIENNE": re.compile(r"\b\d{1,4}\s?[A-Z]{2,3}\s?(?:\d{2,3}|2[AB])\b"),
         # format plaques diplomatiques françaises
         "PLAQUE_DIPLOMATIQUE": re.compile(r"\b(?:[UES]\s?)?\d{1,3}\s?(?:CMD|CD|C|K)\s?\d{1,4}(?:\.\d{2,3})?(?:\s?\d{2,3})?(?:\s?[XZ])?\b"),
     }
@@ -86,8 +86,15 @@ class RegexDetector(PIIDetector):
             for match in pattern.finditer(content):
                 # filtre spécifique à l'IBAN : rejette les candidats
                 # dont la longueur ou la clé de contrôle est invalide
-                if pii_type == "IBAN" and not self._is_valid_iban(match.group()):
-                    continue
+                text, end = match.group(), match.end()
+
+                if pii_type == "IBAN":
+                    # le regex peut avaler des caractères en trop après l'IBAN
+                    # (ex. un mot en majuscules) : on coupe à la longueur du pays
+                    text = self._trim_iban(text)
+                    if not self._is_valid_iban(text):
+                        continue
+                    end = match.start() + len(text)
 
                 if pii_type == "NIR" and not self._is_valid_nir(match.group()):
                     continue
@@ -96,10 +103,10 @@ class RegexDetector(PIIDetector):
                     continue
 
                 spans.append(PIISpan(
-                    text=match.group(),
+                    text=text,
                     type=pii_type,
                     start=match.start(),
-                    end=match.end(),
+                    end=end,
                     source_detector="RegexDetector",
                 ))
         return spans
@@ -109,9 +116,10 @@ class RegexDetector(PIIDetector):
         Vérifie qu'un candidat trouvé par le regex est un nir plausible :
         normalise le texte, vérifie sa longueur puis sa clé de contrôle.
         """
-        nir = nir.replace(" ", "")
+        # Corse : 2A -> 19 et 2B -> 18 pour le calcul de la clé
+        nir = nir.replace(" ", "").replace("2A", "19").replace("2B", "18")
 
-        if not nir.isdigit() or len(nir) != 15 or len(nir) != 13:
+        if not nir.isdigit() or len(nir) not in (13, 15):
             return False
 
         if len(nir) == 13:
@@ -123,6 +131,23 @@ class RegexDetector(PIIDetector):
         cle_calculee = 97 - (num % 97)
 
         return cle_calculee == cle
+
+    def _trim_iban(self, candidate: str) -> str:
+        """
+        Coupe un candidat IBAN à la longueur attendue pour son pays,
+        en comptant les caractères hors espaces.
+        """
+        expected_length = self.IBAN_LENGTHS.get(candidate[:2].upper())
+        if expected_length is None:
+            return candidate
+
+        count = 0
+        for i, char in enumerate(candidate):
+            if not char.isspace():
+                count += 1
+                if count == expected_length:
+                    return candidate[: i + 1]
+        return candidate
 
     def _is_valid_iban(self, candidate: str) -> bool:
         """
@@ -171,7 +196,7 @@ class RegexDetector(PIIDetector):
     def _is_valid_phonenumber(self, phonenumber: str) -> bool:
         phonenumber = re.sub(r"[\s().-]", "", phonenumber)
         try:
-            parsed_number = phonenumbers.parse(phonenumber, None)
+            parsed_number = phonenumbers.parse(phonenumber, "FR")
         except phonenumbers.NumberParseException:
             return False
         return phonenumbers.is_valid_number(parsed_number)
