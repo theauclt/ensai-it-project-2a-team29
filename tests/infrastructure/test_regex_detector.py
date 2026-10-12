@@ -1,21 +1,6 @@
-import phonenumbers
 import pytest
 
 from anonymia.infrastructure.regex_detector import RegexDetector
-
-# Marqueur pour les tests bloques par un bug connu de
-# RegexDetector._is_valid_phonenumber : phonenumbers.parse(numero, None) leve une
-# NumberParseException pour tout candidat sans "+", ce qui fait planter detect()
-# en entier (meme pour un IBAN ou un NIR dont les chiffres ressemblent a un telephone).
-# Correctif attendu : try/except NumberParseException -> False (et/ou region "FR").
-# strict=True : quand le bug est corrige, le test "passe" => pytest le signale,
-# il suffit alors de retirer le marqueur.
-bug_phonenumber = pytest.mark.xfail(
-    reason="bug connu : _is_valid_phonenumber leve NumberParseException "
-    "pour tout candidat sans indicatif '+' (parse(..., None))",
-    raises=phonenumbers.NumberParseException,
-    strict=True,
-)
 
 
 @pytest.fixture
@@ -274,7 +259,6 @@ async def test_detect_telephone_francais_national(detector, numero):
 
 
 @pytest.mark.asyncio
-@bug_phonenumber
 async def test_detect_date_numerique_ne_plante_pas(detector):
     # 8 chiffres : candidat pour le regex TELEPHONE, rejete par phonenumbers
     result = await detector.detect("Reference du dossier : 20200312")
@@ -313,7 +297,6 @@ async def test_detect_iban_autres_pays_valides(detector, iban):
         "GB82WEST12345698765432",
     ],
 )
-@bug_phonenumber
 async def test_detect_iban_avec_longue_suite_de_chiffres(detector, iban):
     # la partie numerique (8 a 15 chiffres consecutifs) est aussi candidate
     # pour le regex TELEPHONE : elle ne doit pas faire planter detect()
@@ -378,7 +361,6 @@ async def test_detect_nir_valide_avec_espaces(detector):
 
 
 @pytest.mark.asyncio
-@bug_phonenumber
 async def test_detect_nir_cle_de_controle_invalide_ignore(detector):
     # meme NIR que test_detect_nir_valide mais cle 26 au lieu de 25
     result = await detector.detect("Numero de secu : 195057800604826")
@@ -387,7 +369,6 @@ async def test_detect_nir_cle_de_controle_invalide_ignore(detector):
 
 
 @pytest.mark.asyncio
-@bug_phonenumber
 async def test_detect_nir_mois_invalide_ignore(detector):
     # mois 13 : impossible dans un NIR
     result = await detector.detect("Numero de secu : 195137800604825")

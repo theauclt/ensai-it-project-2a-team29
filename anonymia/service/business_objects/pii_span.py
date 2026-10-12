@@ -6,6 +6,7 @@ class PIISpan:
 
     def __init__(
         self,
+        text,
         type: str,
         start: int,
         end: int,
@@ -13,6 +14,7 @@ class PIISpan:
     ):
         """Constructor"""
         self.type = type
+        self.text = text
         self.start = start
         self.end = end
         self.source_detector = source_detector

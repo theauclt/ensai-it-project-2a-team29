@@ -170,5 +170,8 @@ class RegexDetector(PIIDetector):
 
     def _is_valid_phonenumber(self, phonenumber: str) -> bool:
         phonenumber = re.sub(r"[\s().-]", "", phonenumber)
-        parsed_number = phonenumbers.parse(phonenumber, None)
+        try:
+            parsed_number = phonenumbers.parse(phonenumber, None)
+        except phonenumbers.NumberParseException:
+            return False
         return phonenumbers.is_valid_number(parsed_number)
