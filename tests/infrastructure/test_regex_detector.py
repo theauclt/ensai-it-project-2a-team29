@@ -70,7 +70,7 @@ async def test_detect_plaque_actuelle(detector):
 
 @pytest.mark.asyncio
 async def test_detect_nir_valide(detector):
-    # NIR construit avec une cle de controle correcte (modulo 97)
+    # NIR construit avec une cle de controle correcte 
     result = await detector.detect("Numero de secu : 195057800604825")
 
     assert len(result) == 1
@@ -144,7 +144,6 @@ async def test_detect_plusieurs_emails(detector):
 @pytest.mark.asyncio
 async def test_detect_meme_email_deux_fois(detector):
     # chaque occurrence doit etre remontee avec sa propre position
-    # (la strategie de pseudonymisation s'appuie dessus)
     content = "marie@free.fr puis encore marie@free.fr"
 
     result = await detector.detect(content)
