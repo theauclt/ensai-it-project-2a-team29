@@ -1,90 +1,68 @@
+import re
+
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
+PLATE_TYPES = {"PLAQUE_ACTUELLE", "PLAQUE_ANCIENNE", "PLAQUE_DIPLOMATIQUE"}
+
 
 class PseudonymizationStrategy(AnonymisationStrategy):
-    """
-    Caviarde le document selon une stratégie de pseudonymisation des PII détectées.
-
-    Une même PII est remplacée par le même pseudonyme dans tout le document.
-    """
 
     def apply(self, content: str, spans: list[PIISpan]) -> str:
-        # Mémorise les correspondances pour qu'une même PII garde le même pseudonyme dans tout le document
         replacements = {}
-
-        # Compteurs pour indexer les PII d'un même type
-        counters = {
-            "EMAIL": 0,
-            "TELEPHONE": 0,
-            "PLAQUE": 0,
-        }
-
+        counters = {"EMAIL": 0, "TELEPHONE": 0, "PLAQUE": 0}
         replacements_to_apply = []
 
-        # Attribution des pseudonymes dans l'ordre d'apparition des PII (le premier a le numero 1)
         for span in sorted(spans, key=lambda span: span.start):
-            key = (span.type, span.text)
+            key = self._build_key(span)
 
             if key not in replacements:
-                replacements[key] = self._generate_pseudonym(
-                    span,
-                    counters,
-                )
+                replacements[key] = self._generate_pseudonym(span, counters)
 
-            replacements_to_apply.append(
-                (span, replacements[key])
-            )
+            replacements_to_apply.append((span, replacements[key]))
 
-        # Remplacement de droite à gauche pour ne pas décaler les positions des PII restantes
         for span, pseudonym in reversed(replacements_to_apply):
-            content = (
-                content[:span.start]
-                + pseudonym
-                + content[span.end:]
-            )
+            content = content[:span.start] + pseudonym + content[span.end:]
 
         return content
 
-    def _generate_pseudonym(
-        self,
-        span: PIISpan,
-        counters: dict[str, int],
-    ) -> str:
-        """Choisit la méthode de pseudonymisation selon le type de PII."""
-
+    def _build_key(self, span: PIISpan) -> tuple[str, str]:
+        """
+        Clé d'identité d'une PII : deux écritures différentes de la même
+        donnée donnent la même clé.
+        """
         if span.type == "EMAIL":
-            counters["EMAIL"] += 1
-            return self._pseudonymize_email(counters["EMAIL"])
+            return ("EMAIL", self._normalize_email(span.text))
 
         if span.type == "TELEPHONE":
-            counters["TELEPHONE"] += 1
-            return self._pseudonymize_phone(counters["TELEPHONE"])
+            return ("TELEPHONE", self._normalize_phone(span.text))
 
-        # Tous les formats de plaques sont remplacés par un format SIV
-        if span.type in {
-            "PLAQUE_ACTUELLE",
-            "PLAQUE_ANCIENNE",
-            "PLAQUE_DIPLOMATIQUE",
-        }:
-            counters["PLAQUE"] += 1
-            return self._pseudonymize_plate(counters["PLAQUE"])
+        if span.type in PLATE_TYPES:
+            # Famille "PLAQUE" : le type de format ne fait pas partie de l'identité
+            return ("PLAQUE", self._normalize_plate(span.text))
 
-        # Évite de laisser passer une PII détectée mais non prise en charge
-        raise ValueError(
-            f"Type de PII non pris en charge : {span.type}"
-        )
+        raise ValueError(f"Type de PII non pris en charge : {span.type}")
 
-    def _pseudonymize_email(self, index: int) -> str:
-        """Génère une adresse e-mail générique."""
-        return f"utilisateur{index}@example.com"
+    def _normalize_email(self, text: str) -> str:
+        """Jean@Mail.fr -> jean@mail.fr"""
+        return text.strip().lower()
 
-    def _pseudonymize_phone(self, index: int) -> str:
-        """Génère un numéro de téléphone fictif français."""
-        return f"06 00 00 00 {index:02d}"
+    def _normalize_phone(self, text: str) -> str:
+        """
+        '06 12 34 56 78', '06.12.34.56.78', '+33 6 12 34 56 78'
+        et '0033612345678' -> '0612345678'
+        """
+        digits = re.sub(r"\D", "", text)
 
-    def _pseudonymize_plate(self, index: int) -> str:
-        """Génère une plaque fictive au format SIV."""
-        return f"XX-{index:03d}-XX"
-    
+        if digits.startswith("0033"):
+            digits = "0" + digits[4:]
+        elif digits.startswith("33") and len(digits) == 11:
+            digits = "0" + digits[2:]
 
+        return digits
+
+    def _normalize_plate(self, text: str) -> str:
+        """'ab-123-cd', 'AB 123 CD' et 'AB123CD' -> 'AB123CD'"""
+        return re.sub(r"[\s\-]", "", text).upper()
+
+    # _generate_pseudonym et les _pseudonymize_* restent inchangés
