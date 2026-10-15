@@ -1,4 +1,4 @@
-from service.interfaces.anonymisation_strategy import AnonymisationStrategy
+from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
 from .masking_strategy import MaskingStrategy
 from .pseudonymization_strategy import PseudonymizationStrategy
