@@ -198,4 +198,4 @@ class RegexDetector(PIIDetector):
             parsed_number = phonenumbers.parse(phonenumber, "FR")
         except phonenumbers.NumberParseException:
             return False
-        return phonenumbers.is_valid_number(parsed_number)
+        return phonenumbers.is_possible_number(parsed_number)
