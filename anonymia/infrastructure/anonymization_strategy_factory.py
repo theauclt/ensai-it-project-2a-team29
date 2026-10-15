@@ -1,6 +1,7 @@
-from ..infrastructure.masking_strategy import MaskingStrategy
-from ..infrastructure.pseudonymization_strategy import PseudonymizationStrategy
-from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
+from service.interfaces.anonymisation_strategy import AnonymisationStrategy
+
+from .masking_strategy import MaskingStrategy
+from .pseudonymization_strategy import PseudonymizationStrategy
 
 
 class AnonymizationStrategyFactory:

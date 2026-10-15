@@ -2,8 +2,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from ..service.interfaces.pii_detector import PIIDetector
 from .business_objects.pii_span import PIISpan
+from .interfaces.pii_detector import PIIDetector
 
 # Import utilisé uniquement pour le typage : pas de dépendance à l'exécution
 # de service/ vers infrastructure/

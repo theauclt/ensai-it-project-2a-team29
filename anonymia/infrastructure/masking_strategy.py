@@ -1,5 +1,5 @@
-from ..service.business_objects.pii_span import PIISpan
-from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
+from service.business_objects.pii_span import PIISpan
+from service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
 
 class MaskingStrategy(AnonymisationStrategy):
