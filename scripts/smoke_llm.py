@@ -7,6 +7,9 @@ Usage (depuis la racine du dépôt) :
     export LLM_API_KEY=...                          # inutile pour Ollama
     python -m scripts.smoke_llm
 """
+
+#ATTENTION ne pas renvoyer directement positions, passer par un match !!!
+
 import asyncio
 
 from anonymia.dependencies import build_llm_detector
