@@ -1,7 +1,6 @@
 from service.business_objects.pii_span import PIISpan
 from service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
-
 class MaskingStrategy(AnonymisationStrategy):
     """
     Caviarde le document selon une stratégie de masquage des PII détectées.
@@ -21,39 +20,34 @@ class MaskingStrategy(AnonymisationStrategy):
     def apply(self, content: str, spans: list[PIISpan]) -> str:
         # Compteurs pour numéroter les PII de chaque type
         mask_count = {
-            "EMAIL": 1,
-            "TELEPHONE": 1,
-            "NIR": 1,
-            "IBAN": 1,
-            "PLAQUE": 1,
+            "EMAIL_": 1,
+            "TEL_": 1,
+            "NIR_": 1,
+            "IBAN_": 1,
+            "PLAQUE_": 1,
         }
+        replacements = {}
+        replacements_to_apply = []
+
+        #Application des masques dans l'ordre d'apparition
+        for span in sorted(spans, key=lambda span: span.start):
+
+            key = (span.type, span.text)
+
+            if key not in replacements:
+
+                mask_type = self.Mask[span.type]
+
+                replacements[key] = f"[{mask_type}{mask_count[mask_type]}]"
+                
+                mask_count[mask_type] += 1
+
+            replacements_to_apply.append((span, replacements[key]))
 
         # Remplacement de droite à gauche pour conserver les positions
-        for span in reversed(spans):
 
-            # toutes les plaques partagent le même compteur
-            if span.type in {
-                "PLAQUE_ACTUELLE",
-                "PLAQUE_ANCIENNE",
-                "PLAQUE_DIPLOMATIQUE",
-            }:
-                count_type = "PLAQUE"
-            else:
-                count_type = span.type
+        for span, mask in reversed(replacements_to_apply):
 
-            mask = (
-                "["
-                + self.Mask[span.type]
-                + str(mask_count[count_type])
-                + "]"
-            )
-
-            mask_count[count_type] += 1
-
-            content = (
-                content[:span.start]
-                + mask
-                + content[span.end:]
-            )
+            content = content[:span.start] + mask + content[span.end:]
 
         return content

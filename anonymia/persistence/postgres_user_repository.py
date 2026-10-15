@@ -1,6 +1,6 @@
 from ..service.business_objects.user import User
 from ..service.interfaces.user_repository import UserRepository
-from ..dao.db_connexion import DBConnection
+from .dao.db_connexion import DBConnection
 
 
 class PostgresUserRepository(UserRepository):
