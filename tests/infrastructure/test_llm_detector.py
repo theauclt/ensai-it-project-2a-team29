@@ -58,7 +58,7 @@ async def test_detect_nominal_positions_et_source():
         ("Rennes", "LIEU"),
     ]
     for span in spans:
-        assert content[span.start : span.end] == span.text
+        assert content[span.start: span.end] == span.text
         assert span.source_detector == "LLMDetector"
 
 
@@ -70,7 +70,7 @@ async def test_detect_toutes_les_occurrences():
 
     assert len(spans) == 2
     assert spans[0].start < spans[1].start
-    assert all(content[s.start : s.end] == "Martin" for s in spans)
+    assert all(content[s.start: s.end] == "Martin" for s in spans)
 
 
 async def test_detect_respecte_les_frontieres_de_mots():

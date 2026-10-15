@@ -15,6 +15,7 @@ from .service.detection_service import DetectionService
 # Charge automatiquement les variables du fichier .env dans os.environ
 load_dotenv()
 
+
 def build_llm_detector() -> LLMDetector:
     """
     Construit le détecteur LLM à partir des variables d'environnement :

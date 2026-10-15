@@ -114,7 +114,7 @@ async def test_detect_plusieurs_types_dans_un_texte(detector):
     }
     # chaque span doit pointer exactement sur son texte dans le document
     for span in result:
-        assert content[span.start : span.end] == span.text
+        assert content[span.start: span.end] == span.text
         assert span.source_detector == "RegexDetector"
 
 
@@ -151,7 +151,7 @@ async def test_detect_meme_email_deux_fois(detector):
     assert len(result) == 2
     assert result[0].start != result[1].start
     for span in result:
-        assert content[span.start : span.end] == "marie@free.fr"
+        assert content[span.start: span.end] == "marie@free.fr"
 
 
 @pytest.mark.asyncio
