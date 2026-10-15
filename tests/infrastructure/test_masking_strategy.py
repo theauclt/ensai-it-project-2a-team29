@@ -1,3 +1,5 @@
+import pytest
+
 from anonymia.infrastructure.masking_strategy import MaskingStrategy
 from anonymia.service.business_objects.pii_span import PIISpan
 
@@ -301,7 +303,7 @@ def test_mask_aucune_pii():
 
 
 #------------------------------------------------------------------------------------------------------
-# CONSERVATION DES POSITIONS
+# PII ORDRE
 #------------------------------------------------------------------------------------------------------
 
 def test_mask_positions():
@@ -325,7 +327,7 @@ def test_mask_positions():
 
 
 #------------------------------------------------------------------------------------------------------
-# SPANS DANS LE DÉSORDRE
+# PII D2SORDRE
 #------------------------------------------------------------------------------------------------------
 
 def test_mask_spans_desordonnes():
