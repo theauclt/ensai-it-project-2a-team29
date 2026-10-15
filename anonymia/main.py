@@ -17,7 +17,7 @@ detection_service = DetectionService(
     strategy_factory=strategy_factory,
 )
 
-for i in range(1, 16):
+for i in range(1, 51):
     fichier = corpus_dir / f"doc_{i:03d}.txt"
 
     print(f"\n{'=' * 50}")
@@ -31,7 +31,7 @@ for i in range(1, 16):
     text = fichier.read_text(encoding="utf-8")
 
     resultat = asyncio.run(
-        detection_service.detect(text, "masking")
+        detection_service.detect(text, "pseudonymization")
     )
 
     print(resultat)

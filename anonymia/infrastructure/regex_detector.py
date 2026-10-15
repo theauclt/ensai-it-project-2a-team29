@@ -1,8 +1,8 @@
 import re
 
 import phonenumbers
-from service.business_objects.pii_span import PIISpan
-from service.interfaces.pii_detector import PIIDetector
+from ..service.business_objects.pii_span import PIISpan
+from ..service.interfaces.pii_detector import PIIDetector
 
 
 class RegexDetector(PIIDetector):
@@ -198,4 +198,4 @@ class RegexDetector(PIIDetector):
             parsed_number = phonenumbers.parse(phonenumber, "FR")
         except phonenumbers.NumberParseException:
             return False
-        return phonenumbers.is_valid_number(parsed_number)
+        return phonenumbers.is_possible_number(parsed_number)

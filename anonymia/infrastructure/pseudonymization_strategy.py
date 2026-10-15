@@ -1,7 +1,7 @@
 import re
 
-from service.business_objects.pii_span import PIISpan
-from service.interfaces.anonymisation_strategy import AnonymisationStrategy
+from ..service.business_objects.pii_span import PIISpan
+from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
 PLATE_TYPES = {"PLAQUE_ACTUELLE", "PLAQUE_ANCIENNE", "PLAQUE_DIPLOMATIQUE"}
 
