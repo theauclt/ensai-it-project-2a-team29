@@ -18,13 +18,13 @@ load_dotenv()
 def build_llm_detector() -> LLMDetector:
     """
     Construit le détecteur LLM à partir des variables d'environnement :
-      LLM_BASE_URL : ex. http://localhost:11434/v1 (Ollama) ou l'URL SSPCloud
+      LLM_BASE_URL : l'URL SSPCloud
       LLM_MODEL    : nom du modèle (ex. qwen2.5:3b)
       LLM_API_KEY  : clé API (inutile pour Ollama en local)
       LLM_TIMEOUT  : timeout en secondes (60 par défaut)
     """
-    base_url = os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1")
-    model = os.environ.get("LLM_MODEL", "qwen2.5:3b")
+    base_url = os.environ.get("LLM_BASE_URL", " https://llm.lab.sspcloud.fr/")
+    model = os.environ.get("LLM_MODEL", "qwen3-8-27b")
     api_key = os.environ.get("LLM_API_KEY")
     timeout = float(os.environ.get("LLM_TIMEOUT", "60"))
 
