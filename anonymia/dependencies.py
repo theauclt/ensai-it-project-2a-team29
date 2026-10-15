@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from .infrastructure.anonymization_strategy_factory import AnonymizationStrategyFactory
 from .infrastructure.llm_detector import LLMDetector
 from .infrastructure.regex_detector import RegexDetector
+from .persistence.postgres_user_repository import PostgresUserRepository
+from .service.authentification_service import AuthentificationService
 from .service.detection_service import DetectionService
 
 # Charge automatiquement les variables du fichier .env dans os.environ
@@ -43,3 +45,8 @@ def build_detection_service(with_llm: bool = True) -> DetectionService:
         detectors=detectors,
         strategy_factory=AnonymizationStrategyFactory(),
     )
+
+
+def build_auth_service() -> AuthentificationService:
+    """Assemble le service d'authentification (utilisé via Depends dans les routes)."""
+    return AuthentificationService(PostgresUserRepository())
