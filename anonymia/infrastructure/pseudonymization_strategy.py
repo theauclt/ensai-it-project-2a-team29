@@ -3,6 +3,8 @@ import re
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
+# TODO : adapter pour pii detectées par LLM
+
 PLATE_TYPES = {"PLAQUE_ACTUELLE", "PLAQUE_ANCIENNE", "PLAQUE_DIPLOMATIQUE"}
 
 
