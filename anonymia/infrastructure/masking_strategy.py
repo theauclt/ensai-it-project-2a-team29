@@ -1,6 +1,9 @@
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 
+# TODO : masque nom prenom -> personne
+
+
 class MaskingStrategy(AnonymisationStrategy):
     """
     Caviarde le document selon une stratégie de masquage des PII détectées.
@@ -15,6 +18,13 @@ class MaskingStrategy(AnonymisationStrategy):
         "PLAQUE_ACTUELLE": "PLAQUE_",
         "PLAQUE_ANCIENNE": "PLAQUE_",
         "PLAQUE_DIPLOMATIQUE": "PLAQUE_",
+        "PRENOM": "PRENOM_",
+        "NOM": "NOM_",
+        "LIEU": "LIEU_",
+        "ORGANISATION": "ORGANISATION_",
+        "ADRESSE": "ADRESSE_",
+        "DATE_NAISSANCE": "DATE_NAISSANCE_",
+        "POSTE": "POSTE_",
     }
 
     def apply(self, content: str, spans: list[PIISpan]) -> str:
@@ -25,11 +35,18 @@ class MaskingStrategy(AnonymisationStrategy):
             "NIR_": 1,
             "IBAN_": 1,
             "PLAQUE_": 1,
+            "PRENOM_": 1,
+            "NOM_": 1,
+            "LIEU_": 1,
+            "ORGANISATION_": 1,
+            "ADRESSE_": 1,
+            "DATE_NAISSANCE_": 1,
+            "POSTE_": 1
         }
         replacements = {}
         replacements_to_apply = []
 
-        #Application des masques dans l'ordre d'apparition
+        # Application des masques dans l'ordre d'apparition
         for span in sorted(spans, key=lambda span: span.start):
 
             key = (span.type, span.text)
