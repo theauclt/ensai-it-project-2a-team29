@@ -68,3 +68,27 @@ class PseudonymizationStrategy(AnonymisationStrategy):
         return re.sub(r"[\s\-]", "", text).upper()
 
     # _generate_pseudonym et les _pseudonymize_* restent inchangés
+
+    def _generate_pseudonym(self, span, counters):
+        if span.type == "EMAIL":
+            counters["EMAIL"] += 1
+            return self._pseudonymize_email(counters["EMAIL"])
+
+        if span.type == "TELEPHONE":
+            counters["TELEPHONE"] += 1
+            return self._pseudonymize_phone(counters["TELEPHONE"])
+
+        if span.type in PLATE_TYPES:
+            counters["PLAQUE"] += 1
+            return self._pseudonymize_plate(counters["PLAQUE"])
+
+        raise ValueError(f"Type de PII non pris en charge : {span.type}")
+
+    def _pseudonymize_email(self, index):
+        return f"utilisateur{index}@example.com"
+
+    def _pseudonymize_phone(self, index):
+        return f"06 00 00 00 {index:02d}"
+
+    def _pseudonymize_plate(self, index):
+        return f"XX-{index:03d}-XX"
