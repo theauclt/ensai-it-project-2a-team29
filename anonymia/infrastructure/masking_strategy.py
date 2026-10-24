@@ -1,70 +1,47 @@
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
-
-# TODO : masque nom prenom -> personne
+from .text_utils import normalize_text
 
 
 class MaskingStrategy(AnonymisationStrategy):
     """
-    Caviarde le document selon une stratégie de masquage des PII détectées.
+    Caviarde le document en remplaçant chaque PII détectée par un marqueur
+    typé et numéroté, par exemple [NOM_1] ou [IBAN_1].
+
+    Une même PII reçoit le même marqueur dans tout le document, quelle que
+    soit sa casse ou ses accents ("DUPONT" et "Dupont" donnent tous deux [NOM_1]).
     """
 
-    # Associe chaque type de PII au masque correspondant
-    Mask = {  # noqa: RUF012
-        "EMAIL": "EMAIL_",
-        "TELEPHONE": "TEL_",
-        "NIR": "NIR_",
-        "IBAN": "IBAN_",
-        "PLAQUE_ACTUELLE": "PLAQUE_",
-        "PLAQUE_ANCIENNE": "PLAQUE_",
-        "PLAQUE_DIPLOMATIQUE": "PLAQUE_",
-        "PRENOM": "PRENOM_",
-        "NOM": "NOM_",
-        "LIEU": "LIEU_",
-        "ORGANISATION": "ORGANISATION_",
-        "ADRESSE": "ADRESSE_",
-        "DATE_NAISSANCE": "DATE_NAISSANCE_",
-        "POSTE": "POSTE_",
+    # Les trois formats de plaques partagent la même étiquette et le même compteur
+    ETIQUETTES = {  # noqa: RUF012
+        "PLAQUE_ACTUELLE": "PLAQUE",
+        "PLAQUE_ANCIENNE": "PLAQUE",
+        "PLAQUE_DIPLOMATIQUE": "PLAQUE",
     }
 
     def apply(self, content: str, spans: list[PIISpan]) -> str:
-        # Compteurs pour numéroter les PII de chaque type
-        mask_count = {
-            "EMAIL_": 1,
-            "TEL_": 1,
-            "NIR_": 1,
-            "IBAN_": 1,
-            "PLAQUE_": 1,
-            "PRENOM_": 1,
-            "NOM_": 1,
-            "LIEU_": 1,
-            "ORGANISATION_": 1,
-            "ADRESSE_": 1,
-            "DATE_NAISSANCE_": 1,
-            "POSTE_": 1
-        }
+        # Mémorise les correspondances pour qu'une même PII garde le même marqueur
         replacements = {}
+
+        # Un compteur par étiquette, repart de zéro à chaque document
+        counters: dict[str, int] = {}
+
         replacements_to_apply = []
 
-        # Application des masques dans l'ordre d'apparition
+        # Numérotation dans l'ordre d'apparition (la première PII d'un type est la n°1)
         for span in sorted(spans, key=lambda span: span.start):
-
-            key = (span.type, span.text)
+            etiquette = self.ETIQUETTES.get(span.type, span.type)
+            # Clé normalisée : "Dupont", "DUPONT" et "dupont" donnent la même clé
+            key = (etiquette, normalize_text(span.text))
 
             if key not in replacements:
-
-                mask_type = self.Mask[span.type]
-
-                replacements[key] = f"[{mask_type}{mask_count[mask_type]}]"
-                
-                mask_count[mask_type] += 1
+                counters[etiquette] = counters.get(etiquette, 0) + 1
+                replacements[key] = f"[{etiquette}_{counters[etiquette]}]"
 
             replacements_to_apply.append((span, replacements[key]))
 
-        # Remplacement de droite à gauche pour conserver les positions
-
-        for span, mask in reversed(replacements_to_apply):
-
-            content = content[:span.start] + mask + content[span.end:]
+        # Remplacement de droite à gauche pour ne pas décaler les positions restantes
+        for span, marker in reversed(replacements_to_apply):
+            content = content[:span.start] + marker + content[span.end:]
 
         return content

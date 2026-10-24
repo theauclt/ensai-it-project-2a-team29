@@ -1,94 +1,157 @@
-import re
-
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
-
-# TODO : adapter pour pii detectées par LLM
-
-PLATE_TYPES = {"PLAQUE_ACTUELLE", "PLAQUE_ANCIENNE", "PLAQUE_DIPLOMATIQUE"}
+from .text_utils import normalize_text
 
 
 class PseudonymizationStrategy(AnonymisationStrategy):
+    """
+    Caviarde le document selon une stratégie de pseudonymisation des PII détectées.
+
+    Une même PII est remplacée par le même pseudonyme dans tout le document,
+    quelle que soit sa casse ou ses accents ("DUPONT", "Dupont" et "dupont"
+    désignent la même personne).
+    """
+
+    PRENOMS = [  # noqa: RUF012
+        "Camille", "Alex", "Dominique", "Claude", "Sacha",
+        "Morgan", "Charlie", "Robin", "Andrea", "Yannick",
+    ]
+    NOMS = [  # noqa: RUF012
+        "Martin", "Bernard", "Durand", "Dubois", "Moreau",
+        "Laurent", "Simon", "Michel", "Lefebvre", "Leroy",
+    ]
+
+    # Type de PII -> groupe de numérotation (les 3 formats de plaques partagent un compteur)
+    GROUPES = {  # noqa: RUF012
+        "EMAIL": "EMAIL",
+        "TELEPHONE": "TELEPHONE",
+        "NIR": "NIR",
+        "IBAN": "IBAN",
+        "PLAQUE_ACTUELLE": "PLAQUE",
+        "PLAQUE_ANCIENNE": "PLAQUE",
+        "PLAQUE_DIPLOMATIQUE": "PLAQUE",
+        "PRENOM": "PRENOM",
+        "NOM": "NOM",
+        "LIEU": "LIEU",
+        "ORGANISATION": "ORGANISATION",
+        "ADRESSE": "ADRESSE",
+        "DATE_NAISSANCE": "DATE_NAISSANCE",
+        "POSTE": "POSTE",
+    }
 
     def apply(self, content: str, spans: list[PIISpan]) -> str:
+        # Mémorise les correspondances pour qu'une même PII garde le même pseudonyme
         replacements = {}
-        counters = {"EMAIL": 0, "TELEPHONE": 0, "PLAQUE": 0}
+
+        # Un compteur par groupe, repart de zéro à chaque document
+        counters: dict[str, int] = {}
+
         replacements_to_apply = []
 
+        # Attribution des pseudonymes dans l'ordre d'apparition (le premier a le numéro 1)
         for span in sorted(spans, key=lambda span: span.start):
-            key = self._build_key(span)
+            # Clé normalisée : "Dupont", "DUPONT" et "dupont" donnent la même clé
+            key = (span.type, normalize_text(span.text))
 
             if key not in replacements:
                 replacements[key] = self._generate_pseudonym(span, counters)
 
             replacements_to_apply.append((span, replacements[key]))
 
+        # Remplacement de droite à gauche pour ne pas décaler les positions restantes
         for span, pseudonym in reversed(replacements_to_apply):
+            # Respect de la casse d'origine pour les noms écrits en majuscules
+            if span.type in {"NOM", "PRENOM"} and span.text.isupper():
+                pseudonym = pseudonym.upper()
+
             content = content[:span.start] + pseudonym + content[span.end:]
 
         return content
 
-    def _build_key(self, span: PIISpan) -> tuple[str, str]:
-        """
-        Clé d'identité d'une PII : deux écritures différentes de la même
-        donnée donnent la même clé.
-        """
-        if span.type == "EMAIL":
-            return ("EMAIL", self._normalize_email(span.text))
+    def _generate_pseudonym(self, span: PIISpan, counters: dict[str, int]) -> str:
+        """Choisit la méthode de pseudonymisation selon le type de PII."""
+        groupe = self.GROUPES.get(span.type)
 
-        if span.type == "TELEPHONE":
-            return ("TELEPHONE", self._normalize_phone(span.text))
+        # Évite de laisser passer une PII détectée mais non prise en charge
+        if groupe is None:
+            raise ValueError(f"Type de PII non pris en charge : {span.type}")
 
-        if span.type in PLATE_TYPES:
-            # Famille "PLAQUE" : le type de format ne fait pas partie de l'identité
-            return ("PLAQUE", self._normalize_plate(span.text))
+        # Incrémente le compteur du groupe : c'est le numéro du pseudonyme
+        counters[groupe] = counters.get(groupe, 0) + 1
+        index = counters[groupe]
 
-        raise ValueError(f"Type de PII non pris en charge : {span.type}")
+        generateurs = {
+            "EMAIL": self._pseudonymize_email,
+            "TELEPHONE": self._pseudonymize_phone,
+            "NIR": self._pseudonymize_nir,
+            "IBAN": self._pseudonymize_iban,
+            "PLAQUE": self._pseudonymize_plate,
+            "PRENOM": self._pseudonymize_prenom,
+            "NOM": self._pseudonymize_nom,
+            "LIEU": self._pseudonymize_lieu,
+            "ORGANISATION": self._pseudonymize_organisation,
+            "ADRESSE": self._pseudonymize_adresse,
+            "DATE_NAISSANCE": self._pseudonymize_date,
+            "POSTE": self._pseudonymize_poste,
+        }
+        return generateurs[groupe](index)
 
-    def _normalize_email(self, text: str) -> str:
-        """Jean@Mail.fr -> jean@mail.fr"""
-        return text.strip().lower()
+    # ------------------------------------------------------------------
+    # Formats fixes (regex)
+    # ------------------------------------------------------------------
 
-    def _normalize_phone(self, text: str) -> str:
-        """
-        '06 12 34 56 78', '06.12.34.56.78', '+33 6 12 34 56 78'
-        et '0033612345678' -> '0612345678'
-        """
-        digits = re.sub(r"\D", "", text)
-
-        if digits.startswith("0033"):
-            digits = "0" + digits[4:]
-        elif digits.startswith("33") and len(digits) == 11:
-            digits = "0" + digits[2:]
-
-        return digits
-
-    def _normalize_plate(self, text: str) -> str:
-        """'ab-123-cd', 'AB 123 CD' et 'AB123CD' -> 'AB123CD'"""
-        return re.sub(r"[\s\-]", "", text).upper()
-
-    # _generate_pseudonym et les _pseudonymize_* restent inchangés
-
-    def _generate_pseudonym(self, span, counters):
-        if span.type == "EMAIL":
-            counters["EMAIL"] += 1
-            return self._pseudonymize_email(counters["EMAIL"])
-
-        if span.type == "TELEPHONE":
-            counters["TELEPHONE"] += 1
-            return self._pseudonymize_phone(counters["TELEPHONE"])
-
-        if span.type in PLATE_TYPES:
-            counters["PLAQUE"] += 1
-            return self._pseudonymize_plate(counters["PLAQUE"])
-
-        raise ValueError(f"Type de PII non pris en charge : {span.type}")
-
-    def _pseudonymize_email(self, index):
+    def _pseudonymize_email(self, index: int) -> str:
+        """Génère une adresse e-mail générique."""
         return f"utilisateur{index}@example.com"
 
-    def _pseudonymize_phone(self, index):
+    def _pseudonymize_phone(self, index: int) -> str:
+        """Génère un numéro de téléphone fictif français."""
         return f"06 00 00 00 {index:02d}"
 
-    def _pseudonymize_plate(self, index):
+    def _pseudonymize_nir(self, index: int) -> str:
+        """Génère un NIR fictif (13 chiffres) : seul le numéro d'ordre varie."""
+        return f"1 00 01 01 001 {index:03d}"
+
+    def _pseudonymize_iban(self, index: int) -> str:
+        """Génère un IBAN fictif de 27 caractères (clé 00, donc jamais un vrai IBAN)."""
+        return f"FR00{'0' * 20}{index:03d}"
+
+    def _pseudonymize_plate(self, index: int) -> str:
+        """Génère une plaque fictive au format SIV."""
         return f"XX-{index:03d}-XX"
+
+    # ------------------------------------------------------------------
+    # Formats libres (LLM)
+    # ------------------------------------------------------------------
+
+    def _pseudonymize_prenom(self, index: int) -> str:
+        """Prénom mixte de la liste ; un suffixe évite les doublons après un tour complet."""
+        i = index - 1
+        tour = i // len(self.PRENOMS)
+        return self.PRENOMS[i % len(self.PRENOMS)] + (f" {tour + 1}" if tour else "")
+
+    def _pseudonymize_nom(self, index: int) -> str:
+        """Nom générique de la liste, même principe que pour les prénoms."""
+        i = index - 1
+        tour = i // len(self.NOMS)
+        return self.NOMS[i % len(self.NOMS)] + (f" {tour + 1}" if tour else "")
+
+    def _pseudonymize_lieu(self, index: int) -> str:
+        """Génère un nom de lieu générique."""
+        return f"Commune {index}"
+
+    def _pseudonymize_organisation(self, index: int) -> str:
+        """Génère un nom d'organisation générique."""
+        return f"Organisation {index}"
+
+    def _pseudonymize_adresse(self, index: int) -> str:
+        """Génère une adresse postale fictive."""
+        return f"{index} rue de l'Exemple"
+
+    def _pseudonymize_date(self, index: int) -> str:
+        """Génère une date de naissance fictive ; l'année varie pour distinguer deux dates."""
+        return f"01/01/{1950 + (index - 1) % 50}"
+
+    def _pseudonymize_poste(self, index: int) -> str:
+        """Génère un intitulé de poste générique."""
+        return f"Agent {index}"

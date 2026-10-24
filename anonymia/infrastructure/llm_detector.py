@@ -7,6 +7,8 @@ import httpx
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
 
+# Ca serait bien de renvoyer un span personne plutot que nom et prenom separé
+
 logger = logging.getLogger(__name__)
 
 # Typologie des PII que le LLM a le droit de renvoyer. Tout autre type est rejeté
@@ -138,7 +140,7 @@ class LLMDetector(PIIDetector):
         candidates = [text]
         start, end = text.find("{"), text.rfind("}")
         if start != -1 and end > start:
-            candidates.append(text[start : end + 1])
+            candidates.append(text[start: end + 1])
 
         for candidate in candidates:
             try:
