@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+
 from ..persistence.dao.db_connexion import DBConnection
 
 
@@ -37,4 +39,6 @@ def init_db():
 
 
 if __name__ == "__main__":
+    load_dotenv()  # lit POSTGRES_* depuis le fichier .env
     init_db()
+    print("Tables users et traitements prêtes.")
