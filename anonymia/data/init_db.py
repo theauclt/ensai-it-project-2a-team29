@@ -1,4 +1,4 @@
-from ..dao.db_connexion import DBConnection
+from ..persistence.dao.db_connexion import DBConnection
 
 
 def init_db():

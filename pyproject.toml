@@ -16,6 +16,7 @@ dependencies = [
     "bcrypt>=4.1",
     "PyJWT>=2.8",
     "phonenumbers==9.0.40",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

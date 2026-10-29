@@ -16,14 +16,11 @@ class ArchiveRepository(ABC):
     @abstractmethod
     async def save(self, entry: AuditEntry) -> None:
         """Enregistre une nouvelle entrée d'audit."""
-        pass
 
     @abstractmethod
     async def find_by_user(self, user_id: str) -> list[AuditEntry]:
         """Retourne les entrées d'audit d'un utilisateur donné."""
-        pass
 
     @abstractmethod
     async def find_all(self) -> list[AuditEntry]:
         """Retourne l'ensemble des entrées d'audit (superviseur/admin)."""
-        pass

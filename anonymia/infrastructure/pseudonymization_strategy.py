@@ -1,6 +1,6 @@
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
-from .text_utils import normalize_text
+from .text_utils import normalize_key
 
 
 class PseudonymizationStrategy(AnonymisationStrategy):
@@ -8,8 +8,9 @@ class PseudonymizationStrategy(AnonymisationStrategy):
     Caviarde le document selon une stratégie de pseudonymisation des PII détectées.
 
     Une même PII est remplacée par le même pseudonyme dans tout le document,
-    quelle que soit sa casse ou ses accents ("DUPONT", "Dupont" et "dupont"
-    désignent la même personne).
+    quelle que soit sa casse, ses accents ou son écriture ("DUPONT", "Dupont"
+    et "dupont" désignent la même personne, "06 12 34 56 78" et "06.12.34.56.78"
+    le même numéro).
     """
 
     PRENOMS = [  # noqa: RUF012
@@ -50,8 +51,11 @@ class PseudonymizationStrategy(AnonymisationStrategy):
 
         # Attribution des pseudonymes dans l'ordre d'apparition (le premier a le numéro 1)
         for span in sorted(spans, key=lambda span: span.start):
-            # Clé normalisée : "Dupont", "DUPONT" et "dupont" donnent la même clé
-            key = (span.type, normalize_text(span.text))
+            # Clé de cohérence : deux écritures de la même valeur donnent la même clé
+            key = (
+                self.GROUPES.get(span.type, span.type),
+                normalize_key(span.type, span.text),
+            )
 
             if key not in replacements:
                 replacements[key] = self._generate_pseudonym(span, counters)

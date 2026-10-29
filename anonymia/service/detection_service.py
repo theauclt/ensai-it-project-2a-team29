@@ -41,7 +41,7 @@ class DetectionService:
         """Lance tous les détecteurs en parallèle et regroupe leurs résultats."""
         # gather lance les détecteurs en même temps : on attend seulement le plus lent
         # return_exceptions=True : une panne ne fait pas échouer les autres
-        results = await asyncio.gather(  # noqa: F821
+        results = await asyncio.gather(
             *(detector.detect(content) for detector in self._detectors),
             return_exceptions=True,
         )

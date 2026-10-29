@@ -1,9 +1,6 @@
-import pytest
 
 from anonymia.infrastructure.masking_strategy import MaskingStrategy
 from anonymia.service.business_objects.pii_span import PIISpan
-
-
 
 ######### EMAIL
 

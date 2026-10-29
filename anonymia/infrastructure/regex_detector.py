@@ -1,6 +1,7 @@
 import re
 
 import phonenumbers
+
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
 

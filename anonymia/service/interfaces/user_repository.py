@@ -21,4 +21,3 @@ class UserRepository(ABC):
             User | None: L'utilisateur correspondant s'il existe,
             sinon None.
         """
-        pass

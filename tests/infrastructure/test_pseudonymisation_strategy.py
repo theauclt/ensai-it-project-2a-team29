@@ -3,7 +3,6 @@ import pytest
 from anonymia.infrastructure.pseudonymization_strategy import PseudonymizationStrategy
 from anonymia.service.business_objects.pii_span import PIISpan
 
-
 #------------------------------------------------------------------------------------------------------
 # EMAIL
 #------------------------------------------------------------------------------------------------------
@@ -376,11 +375,11 @@ def test_pseudonymize_positions():
 #------------------------------------------------------------------------------------------------------
 
 def test_pseudonymize_type_inconnu():
-    content = "Mon NIR est 189057512345678."
-    nir = "189057512345678"
-    start = content.index(nir)
+    content = "Valeur étrange : XYZ."
+    valeur = "XYZ"
+    start = content.index(valeur)
 
-    span = PIISpan(nir, "NIR", start, start + len(nir), "regex")
+    span = PIISpan(valeur, "TYPE_INCONNU", start, start + len(valeur), "regex")
 
     with pytest.raises(ValueError):
         PseudonymizationStrategy().apply(content, [span])

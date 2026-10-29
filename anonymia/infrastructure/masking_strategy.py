@@ -1,6 +1,6 @@
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
-from .text_utils import normalize_text
+from .text_utils import normalize_key  # CHANGEMENT 1 : était normalize_text
 
 
 class MaskingStrategy(AnonymisationStrategy):
@@ -14,6 +14,7 @@ class MaskingStrategy(AnonymisationStrategy):
 
     # Les trois formats de plaques partagent la même étiquette et le même compteur
     ETIQUETTES = {  # noqa: RUF012
+        "TELEPHONE": "TEL",  # CHANGEMENT 2 : ligne ajoutée
         "PLAQUE_ACTUELLE": "PLAQUE",
         "PLAQUE_ANCIENNE": "PLAQUE",
         "PLAQUE_DIPLOMATIQUE": "PLAQUE",
@@ -31,8 +32,8 @@ class MaskingStrategy(AnonymisationStrategy):
         # Numérotation dans l'ordre d'apparition (la première PII d'un type est la n°1)
         for span in sorted(spans, key=lambda span: span.start):
             etiquette = self.ETIQUETTES.get(span.type, span.type)
-            # Clé normalisée : "Dupont", "DUPONT" et "dupont" donnent la même clé
-            key = (etiquette, normalize_text(span.text))
+            # Clé de cohérence : deux écritures de la même valeur donnent la même clé
+            key = (etiquette, normalize_key(span.type, span.text))
 
             if key not in replacements:
                 counters[etiquette] = counters.get(etiquette, 0) + 1

@@ -13,4 +13,3 @@ class PIIDetector(ABC):
     @abstractmethod
     async def detect(self, content: str) -> list[PIISpan]:
         """Détecte les PII dans le texte et renvoie la liste des spans trouvés."""
-        pass

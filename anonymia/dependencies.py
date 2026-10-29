@@ -5,8 +5,8 @@ et à les assembler (cf. dossier d'analyse, section 2.1).
 import os
 
 import httpx
-
 from dotenv import load_dotenv
+
 from .infrastructure.anonymization_strategy_factory import AnonymizationStrategyFactory
 from .infrastructure.llm_detector import LLMDetector
 from .infrastructure.regex_detector import RegexDetector
@@ -26,7 +26,7 @@ def build_llm_detector() -> LLMDetector:
       LLM_API_KEY  : clé API (inutile pour Ollama en local)
       LLM_TIMEOUT  : timeout en secondes (60 par défaut)
     """
-    base_url = os.environ.get("LLM_BASE_URL", " https://llm.lab.sspcloud.fr/")
+    base_url = os.environ.get("LLM_BASE_URL", "https://llm.lab.sspcloud.fr/api")
     model = os.environ.get("LLM_MODEL", "qwen3-8-27b")
     api_key = os.environ.get("LLM_API_KEY")
     timeout = float(os.environ.get("LLM_TIMEOUT", "60"))

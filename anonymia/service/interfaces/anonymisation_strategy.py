@@ -13,4 +13,3 @@ class AnonymisationStrategy(ABC):
     @abstractmethod
     def apply(self, content: str, spans: list[PIISpan]) -> str:
         """Caviarde le document"""
-        pass
