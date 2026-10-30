@@ -10,9 +10,12 @@ from dotenv import load_dotenv
 from .infrastructure.anonymization_strategy_factory import AnonymizationStrategyFactory
 from .infrastructure.llm_detector import LLMDetector
 from .infrastructure.regex_detector import RegexDetector
+from .persistence.postgres_archive_repository import PostgresArchiveRepository
 from .persistence.postgres_user_repository import PostgresUserRepository
 from .service.authentification_service import AuthentificationService
 from .service.detection_service import DetectionService
+from .service.history_service import HistoryService
+from .service.interfaces.archive_repository import ArchiveRepository
 
 # Charge automatiquement les variables du fichier .env dans os.environ
 load_dotenv()
@@ -36,7 +39,14 @@ def build_llm_detector() -> LLMDetector:
     return LLMDetector(client=client, model=model)
 
 
-def build_detection_service(with_llm: bool = True) -> DetectionService:
+def build_archive_repository() -> ArchiveRepository:
+    """Dépôt de l'historique des traitements (PostgreSQL)."""
+    return PostgresArchiveRepository()
+
+
+def build_detection_service(
+    archive_repo: ArchiveRepository, with_llm: bool = True
+) -> DetectionService:
     """Assemble le service. Mode dégradé = retirer le détecteur LLM de la liste."""
     detectors = [RegexDetector()]
     if with_llm:
@@ -44,7 +54,13 @@ def build_detection_service(with_llm: bool = True) -> DetectionService:
     return DetectionService(
         detectors=detectors,
         strategy_factory=AnonymizationStrategyFactory(),
+        archive_repo=archive_repo,
     )
+
+
+def build_history_service(archive_repo: ArchiveRepository) -> HistoryService:
+    """Assemble le service de consultation de l'historique."""
+    return HistoryService(archive_repo)
 
 
 def build_auth_service() -> AuthentificationService:

@@ -15,6 +15,7 @@ from anonymia.infrastructure.llm_detector import (
 )
 from anonymia.infrastructure.regex_detector import RegexDetector
 from anonymia.service.detection_service import DetectionService
+from tests.fakes import FakeArchiveRepository
 
 
 def make_detector(handler) -> LLMDetector:
@@ -275,10 +276,11 @@ async def test_detection_service_mode_degrade_si_llm_en_panne():
     service = DetectionService(
         detectors=[RegexDetector(), llm],
         strategy_factory=AnonymizationStrategyFactory(),
+        archive_repo=FakeArchiveRepository(),
     )
 
     result = await service.detect(
-        "Contact : marie@free.fr, M. Martin", strategy_name="masking"
+        "Contact : marie@free.fr, M. Martin", strategy_name="masking", user_id=1
     )
 
     # le détecteur regex a fonctionné, l'email est caviardé ; le nom n'est pas vu
@@ -297,8 +299,12 @@ async def test_detection_service_fusionne_regex_et_llm():
             return SpyStrategy()
 
     llm = make_detector(reply_with(entities(("Martin", "NOM"))))
-    service = DetectionService(detectors=[RegexDetector(), llm], strategy_factory=SpyFactory())
+    service = DetectionService(
+        detectors=[RegexDetector(), llm],
+        strategy_factory=SpyFactory(),
+        archive_repo=FakeArchiveRepository(),
+    )
 
-    result = await service.detect("M. Martin : marie@free.fr", strategy_name="peu_importe")
+    result = await service.detect("M. Martin : marie@free.fr", strategy_name="peu_importe", user_id=1)
 
     assert result == "LLMDetector:NOM,RegexDetector:EMAIL"
