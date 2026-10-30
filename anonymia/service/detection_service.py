@@ -35,6 +35,17 @@ class DetectionService:
         self._detectors = detectors
         self._strategy_factory = strategy_factory
         self._archive_repo = archive_repo
+    
+    def available_strategies(self) -> list[str]:
+        """Noms des stratégies d'anonymisation disponibles (endpoint /documents/strategies)."""
+        return self._strategy_factory.available_strategies()
+
+    async def aclose(self) -> None:
+        """Ferme les ressources des détecteurs qui en ont (client HTTP du LLM)."""
+        for detector in self._detectors:
+            close = getattr(detector, "aclose", None)
+            if close is not None:
+                await close()
 
     async def analyze(self, content: str) -> list[PIISpan]:
         """Renvoie la liste fusionnée des PII détectées (endpoint /documents/analyser)."""

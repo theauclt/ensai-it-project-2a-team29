@@ -1,5 +1,7 @@
 from anonymia.service.business_objects.audit_entry import AuditEntry
+from anonymia.service.business_objects.user import User
 from anonymia.service.interfaces.archive_repository import ArchiveRepository
+from anonymia.service.interfaces.user_repository import UserRepository
 
 
 class FakeArchiveRepository(ArchiveRepository):
@@ -17,3 +19,13 @@ class FakeArchiveRepository(ArchiveRepository):
 
     async def find_all(self) -> list[AuditEntry]:
         return list(self.entries)
+
+
+class FakeUserRepository(UserRepository):
+    """Comptes gardés en mémoire : remplace PostgreSQL dans les tests."""
+
+    def __init__(self, users: list[User] | None = None) -> None:
+        self.users = {u.login: u for u in users or []}
+
+    async def find_by_login(self, login: str) -> User | None:
+        return self.users.get(login)

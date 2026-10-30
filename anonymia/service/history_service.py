@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from .business_objects.audit_entry import AuditEntry
 from .business_objects.user import User
 from .interfaces.archive_repository import ArchiveRepository
+from .interfaces.user_repository import UserRepository
 
 
 def _as_utc(date: datetime) -> datetime:
@@ -15,13 +16,14 @@ class HistoryService:
 
     ROLES_AUTORISES = frozenset({"SUPERVISOR", "ADMIN"})
 
-    def __init__(self, archive_repo: ArchiveRepository):
+    def __init__(self, archive_repo: ArchiveRepository, user_repo: UserRepository):
         self._archive_repo = archive_repo
+        self._user_repo = user_repo
 
     async def get_history(
         self,
         requester: User,
-        user_id: int | None = None,
+        login: str | None = None,
         date_debut: datetime | None = None,
         date_fin: datetime | None = None,
     ) -> list[AuditEntry]:
@@ -33,8 +35,11 @@ class HistoryService:
                 "et aux administrateurs"
             )
 
-        if user_id is not None:
-            entries = await self._archive_repo.find_by_user(user_id)
+        if login is not None:
+            target = await self._user_repo.find_by_login(login)
+            if target is None:
+                return []  # login inconnu : aucun traitement, sans révéler s'il existe
+            entries = await self._archive_repo.find_by_user(target.id)
         else:
             entries = await self._archive_repo.find_all()
 

@@ -4,6 +4,12 @@ from .pseudonymization_strategy import PseudonymizationStrategy
 
 
 class AnonymizationStrategyFactory:
+    STRATEGIES = ("masking", "pseudonymization")
+
+    @classmethod
+    def available_strategies(cls) -> list[str]:
+        """Noms des stratégies que get_strategy sait construire."""
+        return list(cls.STRATEGIES)
 
     @classmethod
     def get_strategy(cls, strategy: str) -> AnonymisationStrategy:

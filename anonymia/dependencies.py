@@ -16,6 +16,7 @@ from .service.authentification_service import AuthentificationService
 from .service.detection_service import DetectionService
 from .service.history_service import HistoryService
 from .service.interfaces.archive_repository import ArchiveRepository
+from .service.interfaces.user_repository import UserRepository
 
 # Charge automatiquement les variables du fichier .env dans os.environ
 load_dotenv()
@@ -44,6 +45,11 @@ def build_archive_repository() -> ArchiveRepository:
     return PostgresArchiveRepository()
 
 
+def build_user_repository() -> UserRepository:
+    """Dépôt des comptes utilisateurs (PostgreSQL)."""
+    return PostgresUserRepository()
+
+
 def build_detection_service(
     archive_repo: ArchiveRepository, with_llm: bool = True
 ) -> DetectionService:
@@ -58,11 +64,13 @@ def build_detection_service(
     )
 
 
-def build_history_service(archive_repo: ArchiveRepository) -> HistoryService:
+def build_history_service(
+    archive_repo: ArchiveRepository, user_repo: UserRepository
+) -> HistoryService:
     """Assemble le service de consultation de l'historique."""
-    return HistoryService(archive_repo)
+    return HistoryService(archive_repo, user_repo)
 
 
-def build_auth_service() -> AuthentificationService:
+def build_auth_service(user_repo: UserRepository) -> AuthentificationService:
     """Assemble le service d'authentification (utilisé via Depends dans les routes)."""
-    return AuthentificationService(PostgresUserRepository())
+    return AuthentificationService(user_repo)

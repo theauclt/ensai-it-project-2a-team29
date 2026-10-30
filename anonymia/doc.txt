@@ -1,0 +1,297 @@
+================================================================================
+ANONYMIA - GUIDE DE TEST (VERSION PROVISOIRE)
+================================================================================
+
+Ce guide explique comment installer l'API, la lancer et la tester a la main.
+Il sera remplace par un vrai README quand l'application sera stabilisee.
+
+Ce que fait l'application : elle recoit un texte, detecte les donnees
+personnelles (e-mail, telephone, NIR, IBAN, plaques, noms, lieux...) avec des
+expressions regulieres et un LLM, puis renvoie le texte caviarde (masquage ou
+pseudonymisation). Chaque traitement est archive en base (hash du document,
+strategie, nombre de PII : jamais le contenu). Les superviseurs et
+administrateurs peuvent consulter cet historique.
+
+
+--------------------------------------------------------------------------------
+1. PREREQUIS
+--------------------------------------------------------------------------------
+
+- Python 3.12 ou plus recent
+- Git
+- Une base PostgreSQL (celle du Datalab, la meme qu'au TP1)
+  [A COMPLETER : base commune a l'equipe ou base personnelle ? Qui l'heberge ?]
+- Facultatif : une cle pour le LLM du Datalab (voir la partie 9). L'API
+  fonctionne sans, avec les expressions regulieres seules.
+
+
+--------------------------------------------------------------------------------
+2. INSTALLATION
+--------------------------------------------------------------------------------
+
+Depuis la racine du depot (le dossier qui contient pyproject.toml) :
+
+    git clone [A COMPLETER : adresse du depot]
+    cd ensai-it-project-2a-team29
+
+    python -m venv .venv
+    source .venv/bin/activate          (Windows : .venv\Scripts\activate)
+
+    pip install -e ".[dev]"
+
+A refaire seulement si pyproject.toml change. Pensez a reactiver
+l'environnement (source .venv/bin/activate) a chaque nouveau terminal.
+
+
+--------------------------------------------------------------------------------
+3. CONFIGURATION (fichier .env)
+--------------------------------------------------------------------------------
+
+    cp .env.example .env
+
+Ouvrez .env et renseignez :
+
+    POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DATABASE, POSTGRES_USER,
+    POSTGRES_PASSWORD, POSTGRES_SCHEMA
+        -> les identifiants de votre base PostgreSQL.
+
+    JWT_SECRET
+        -> une cle secrete, a generer avec :
+           python -c "import secrets; print(secrets.token_urlsafe(32))"
+           Sans elle, l'API refuse de demarrer.
+
+    LLM_ENABLED=false
+        -> pour un premier test avec les expressions regulieres seules.
+
+Le fichier .env est ignore par Git : ne le partagez jamais (mots de passe, cles).
+
+
+--------------------------------------------------------------------------------
+4. PREPARER LA BASE DE DONNEES (une seule fois)
+--------------------------------------------------------------------------------
+
+Creer les tables :
+
+    python -m anonymia.data.init_db
+
+Creer un compte par role (le mot de passe est demande au clavier, 8 caracteres
+minimum) :
+
+    python -m scripts.create_user admin ADMIN
+    python -m scripts.create_user sup SUPERVISOR
+    python -m scripts.create_user alice USER
+
+Verifier que la base et l'authentification fonctionnent :
+
+    python -m scripts.check_db admin <mot_de_passe_de_admin>
+
+Quatre lignes doivent s'afficher, les deux premieres a "True", la troisieme
+aussi. Ce script ajoute un traitement fictif dans l'historique a chaque appel.
+
+
+--------------------------------------------------------------------------------
+5. LANCER L'API
+--------------------------------------------------------------------------------
+
+En local :
+
+    uvicorn anonymia.main:app --reload
+
+    -> documentation interactive : http://localhost:8000/docs
+
+Sur le Datalab (VSCode), l'API passe par un proxy : il faut ajouter le prefixe,
+sinon la page /docs affiche "Failed to load API definition" :
+
+    uvicorn anonymia.main:app --reload --root-path /proxy/8000
+
+    -> adresse : celle de votre VSCode avec /proxy/8000/docs a la fin, par
+       exemple https://user-xxxx.user.lab.sspcloud.fr/proxy/8000/docs
+
+Le numero de port doit etre le meme dans --port et dans --root-path.
+Arret du serveur : Ctrl+C.
+
+
+--------------------------------------------------------------------------------
+6. FAIRE DES REQUETES DEPUIS LA PAGE /docs
+--------------------------------------------------------------------------------
+
+Aucun outil a installer : tout se fait dans la page.
+
+1) Se connecter
+   - Cliquer sur POST /auth/connexion, puis "Try it out".
+   - Remplacer le corps par :
+         {"login": "admin", "mot_de_passe": "votre_mot_de_passe"}
+   - Cliquer sur "Execute". Reponse attendue : code 200 et un "access_token".
+
+2) Donner le jeton a Swagger
+   - Copier la valeur de access_token, SANS les guillemets.
+   - Cliquer sur "Authorize" (cadenas, en haut a droite), coller le jeton
+     SANS ecrire "Bearer", puis "Authorize" et "Close".
+   - Le jeton expire au bout de 30 minutes : refaire les etapes 1 et 2 si des
+     erreurs 401 apparaissent. Pour changer de compte : "Authorize" puis
+     "Logout", puis recommencer.
+
+3) Appeler les autres endpoints (meme geste : deplier, "Try it out", remplir,
+   "Execute") :
+
+   POST /documents/caviarder   corps : {"contenu": "...", "strategie": "masking"}
+                               strategie : "masking" ou "pseudonymization"
+   POST /documents/analyser    corps : {"contenu": "..."}
+   GET  /documents/strategies  pas de corps
+   GET  /journaux              reserve aux roles SUPERVISOR et ADMIN
+                               filtres facultatifs : utilisateur (login),
+                               date_debut et date_fin (AAAA-MM-JJ, inclus)
+
+
+--------------------------------------------------------------------------------
+7. SCENARIOS A TESTER ET RESULTATS ATTENDUS
+--------------------------------------------------------------------------------
+
+A. Masquage (compte quelconque)
+   POST /documents/caviarder
+   {"contenu": "Ecrire a jean@mail.fr ou au 06 12 34 56 78.", "strategie": "masking"}
+   Attendu : "Ecrire a [EMAIL_1] ou au [TEL_1]."
+
+B. Pseudonymisation
+   Meme corps avec "strategie": "pseudonymization".
+   Attendu : "Ecrire a utilisateur1@example.com ou au 06 00 00 00 01."
+
+C. Coherence : une meme valeur recoit toujours le meme marqueur
+   {"contenu": "jean@mail.fr puis JEAN@mail.fr puis paul@mail.fr", "strategie": "masking"}
+   Attendu : [EMAIL_1] puis [EMAIL_1] puis [EMAIL_2]
+
+D. Analyse avec positions
+   POST /documents/analyser
+   {"contenu": "IBAN FR1420041010050500013M02606"}
+   Attendu : un element de type IBAN avec debut, fin et le texte trouve.
+
+E. IBAN a cle de controle invalide (dernier chiffre modifie)
+   {"contenu": "IBAN FR1420041010050500013M02607"}
+   Attendu : aucune PII detectee.
+
+F. Document sans donnee personnelle
+   {"contenu": "Ceci est un document sans donnee personnelle."}
+   Attendu : texte renvoye identique.
+
+G. Historique, avec un compte SUPERVISOR ou ADMIN
+   GET /journaux
+   Attendu : les traitements precedents, du plus recent au plus ancien, avec
+   hash_document, strategie, nombre de PII. JAMAIS le texte des documents.
+   Essayer aussi le filtre utilisateur=alice et date_debut=2026-01-01.
+
+H. Droits : se connecter avec le compte USER, puis GET /journaux
+   Attendu : 403.
+
+I. Erreurs attendues
+   - Appeler un endpoint sans etre connecte ............... 401
+   - "strategie": "magie" ................................. 400
+   - "contenu": "" (vide) ................................. 422
+   - Mauvais mot de passe a la connexion .................. 401
+
+J. Avec le LLM (voir la partie 9)
+   {"contenu": "Madame Claire Martin, nee le 12 mars 1985 a Nantes, habite 12 rue des Lilas a Rennes."}
+   Attendu (variable, le LLM n'est pas deterministe) : PRENOM Claire, NOM Martin,
+   DATE_NAISSANCE, LIEU Nantes et Rennes, ADRESSE. Premier appel : environ 5 s.
+
+
+--------------------------------------------------------------------------------
+8. TESTS AUTOMATIQUES
+--------------------------------------------------------------------------------
+
+    pytest              lance tous les tests (sans base ni LLM reels)
+    ruff check .        verifie le style du code (comme la CI GitHub)
+    ruff check --fix .  corrige automatiquement ce qui peut l'etre
+
+Avant chaque commit, ces deux commandes doivent passer sans erreur.
+
+
+--------------------------------------------------------------------------------
+9. TESTER AVEC LE LLM (facultatif)
+--------------------------------------------------------------------------------
+
+Dans .env :
+
+    LLM_ENABLED=true
+    LLM_BASE_URL=https://llm.lab.sspcloud.fr/api
+    LLM_MODEL=<nom du modele>
+    LLM_API_KEY=<votre cle personnelle du Datalab>
+
+ou, avec Ollama en local : LLM_BASE_URL=http://localhost:11434/v1 (pas de cle).
+
+Regle du projet : jamais d'API LLM commerciale sur du contenu reel.
+
+Test rapide du LLM seul, sans l'API :
+
+    python -m scripts.smoke_llm
+
+Si le LLM est indisponible, l'API continue avec les expressions regulieres
+seules (mode degrade) : le champ "detecteurs_contributeurs" de /journaux ne
+mentionne alors que RegexDetector.
+
+
+--------------------------------------------------------------------------------
+10. PROBLEMES FREQUENTS
+--------------------------------------------------------------------------------
+
+"Failed to load API definition" (404 /openapi.json)
+    -> Lancer uvicorn avec --root-path /proxy/8000 (partie 5).
+
+L'API ne demarre pas : "Variable d'environnement manquante : JWT_SECRET"
+    -> Renseigner JWT_SECRET dans .env (partie 3).
+
+KeyError: 'POSTGRES_HOST' (ou autre variable POSTGRES_*)
+    -> .env absent ou incomplet, ou commande lancee hors de la racine du depot.
+
+Connexion : erreur 500
+    -> Lire le message dans le terminal d'uvicorn. Le plus souvent : identifiants
+       PostgreSQL faux, ou tables non creees (partie 4).
+
+Connexion : erreur 401 alors que le mot de passe est bon
+    -> Le compte n'existe pas dans CETTE base (partie 4), ou il est desactive.
+
+Toutes les requetes renvoient 401 apres un moment
+    -> Le jeton a expire (30 minutes) : se reconnecter.
+
+"Création impossible : UniqueViolation" avec create_user
+    -> Ce login existe deja.
+
+pip install : erreur sur un paquet "installe par le systeme"
+    -> Vous n'etes pas dans l'environnement virtuel (partie 2).
+
+
+--------------------------------------------------------------------------------
+11. LIMITES CONNUES (v0)
+--------------------------------------------------------------------------------
+
+Pas encore disponible :
+- inscription, deconnexion et gestion des comptes par l'administrateur
+  (les comptes se creent avec scripts/create_user.py)
+- detail d'un traitement (/journaux/{id})
+- interface graphique (Streamlit)
+- pre-filtre contre l'injection de prompt (seuls le prompt strict et la
+  verification de la sortie du LLM sont en place)
+
+Comportements a connaitre :
+- le jeton dure 30 minutes et n'est pas reverifie en base : un compte desactive
+  garde son acces jusqu'a l'expiration du jeton
+- /journaux affiche l'identifiant numerique de l'utilisateur, pas son login
+- "analyser" n'enregistre rien dans l'historique, seul "caviarder" archive
+- si l'archivage en base echoue, le caviardage echoue aussi (pas de traitement
+  sans trace)
+- taille maximale d'un document : 100 000 caracteres
+- Anonymia est une aide au caviarde, pas une garantie : une relecture humaine
+  reste necessaire
+
+
+--------------------------------------------------------------------------------
+12. SIGNALER UN PROBLEME
+--------------------------------------------------------------------------------
+
+Pour qu'un bug soit reproductible, indiquez :
+1. l'endpoint et le corps de la requete envoye
+2. le code et la reponse recus
+3. le message affiche dans le terminal d'uvicorn
+4. avec ou sans LLM (LLM_ENABLED)
+
+Ne collez jamais de vrai document personnel, de mot de passe, de cle API ni le
+contenu de votre fichier .env dans un message ou une issue.
