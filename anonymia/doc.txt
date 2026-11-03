@@ -47,7 +47,7 @@ l'environnement (source .venv/bin/activate) a chaque nouveau terminal.
 3. CONFIGURATION (fichier .env)
 --------------------------------------------------------------------------------
 
-    cp .env.example .env
+    cp .env.exemple .env
 
 Ouvrez .env et renseignez :
 
@@ -60,8 +60,22 @@ Ouvrez .env et renseignez :
            python -c "import secrets; print(secrets.token_urlsafe(32))"
            Sans elle, l'API refuse de demarrer.
 
+    ADMIN_LOGIN, ADMIN_PASSWORD
+        -> le compte administrateur initial (facultatif). S'ils sont renseignes,
+           l'API cree ce compte au demarrage, avec le role ADMIN, s'il n'existe
+           pas encore. Mot de passe : 8 caracteres minimum. Au demarrage suivant,
+           le compte existe deja : il n'est pas modifie.
+
     LLM_ENABLED=false
         -> pour un premier test avec les expressions regulieres seules.
+    
+    Pour utiliser LLM 
+        -> se connecter sur https://llm.lab.sspcloud.fr/
+            dans profil copie cle acces et la coller dans LLM_API_KEY
+            renseigner LLM_MODEL=qwen3-8-27b
+            LLM_ENABLED=true
+            
+
 
 Le fichier .env est ignore par Git : ne le partagez jamais (mots de passe, cles).
 
@@ -74,10 +88,15 @@ Creer les tables :
 
     python -m anonymia.data.init_db
 
-Creer un compte par role (le mot de passe est demande au clavier, 8 caracteres
-minimum) :
+Le compte administrateur est cree automatiquement au demarrage de l'API si
+ADMIN_LOGIN et ADMIN_PASSWORD sont dans .env (partie 3). Sans ces variables,
+le creer a la main :
 
     python -m scripts.create_user admin ADMIN
+
+Creer les autres comptes (le mot de passe est demande au clavier, 8 caracteres
+minimum) :
+
     python -m scripts.create_user sup SUPERVISOR
     python -m scripts.create_user alice USER
 
@@ -94,10 +113,6 @@ aussi. Ce script ajoute un traitement fictif dans l'historique a chaque appel.
 --------------------------------------------------------------------------------
 
 En local :
-
-    uvicorn anonymia.main:app --reload
-
-    -> documentation interactive : http://localhost:8000/docs
 
 Sur le Datalab (VSCode), l'API passe par un proxy : il faut ajouter le prefixe,
 sinon la page /docs affiche "Failed to load API definition" :
@@ -142,6 +157,17 @@ Aucun outil a installer : tout se fait dans la page.
                                filtres facultatifs : utilisateur (login),
                                date_debut et date_fin (AAAA-MM-JJ, inclus)
 
+   Gestion des comptes (role ADMIN uniquement, section "Administration") :
+
+   GET    /admin/utilisateurs                 liste des comptes
+   POST   /admin/utilisateurs                 corps : {"login": "bob",
+                                              "mot_de_passe": "...", "role": "USER"}
+   PATCH  /admin/utilisateurs/{id}/role       corps : {"role": "SUPERVISOR"}
+   PATCH  /admin/utilisateurs/{id}/activation corps : {"est_active": false}
+   DELETE /admin/utilisateurs/{id}            supprime le compte ET ses traitements
+                                              archives (preferer la desactivation)
+   L'id se lit dans la reponse de GET /admin/utilisateurs.
+
 
 --------------------------------------------------------------------------------
 7. SCENARIOS A TESTER ET RESULTATS ATTENDUS
@@ -181,6 +207,14 @@ G. Historique, avec un compte SUPERVISOR ou ADMIN
 
 H. Droits : se connecter avec le compte USER, puis GET /journaux
    Attendu : 403.
+
+H2. Administration : avec le compte ADMIN
+   - POST /admin/utilisateurs puis se connecter avec le nouveau compte ...... 201
+   - PATCH .../activation avec est_active=false, puis se connecter .......... 401
+   - DELETE sur son propre compte ou sur le dernier admin actif ............. 409
+   - Avec un compte USER ou SUPERVISOR, toute route /admin ................. 403
+   Le role est lu dans le jeton : une desactivation ou un changement de role
+   ne prend effet sur un jeton deja emis qu'a son expiration (30 minutes).
 
 I. Erreurs attendues
    - Appeler un endpoint sans etre connecte ............... 401
@@ -239,6 +273,12 @@ mentionne alors que RegexDetector.
 L'API ne demarre pas : "Variable d'environnement manquante : JWT_SECRET"
     -> Renseigner JWT_SECRET dans .env (partie 3).
 
+L'API ne demarre pas : "ADMIN_PASSWORD trop court"
+    -> Le mot de passe de ADMIN_PASSWORD doit faire 8 caracteres minimum.
+
+L'API ne demarre pas au premier lancement, erreur sur la table "users"
+    -> Les tables n'existent pas : lancer init_db avant (partie 4).
+
 KeyError: 'POSTGRES_HOST' (ou autre variable POSTGRES_*)
     -> .env absent ou incomplet, ou commande lancee hors de la racine du depot.
 
@@ -264,8 +304,10 @@ pip install : erreur sur un paquet "installe par le systeme"
 --------------------------------------------------------------------------------
 
 Pas encore disponible :
-- inscription, deconnexion et gestion des comptes par l'administrateur
-  (les comptes se creent avec scripts/create_user.py)
+- inscription libre et deconnexion (les comptes sont crees par l'administrateur
+  via /admin/utilisateurs ; le premier est cree au demarrage via ADMIN_LOGIN et
+  ADMIN_PASSWORD, ou avec scripts/create_user.py)
+- revocation immediate des jetons (voir H2)
 - detail d'un traitement (/journaux/{id})
 - interface graphique (Streamlit)
 - pre-filtre contre l'injection de prompt (seuls le prompt strict et la
