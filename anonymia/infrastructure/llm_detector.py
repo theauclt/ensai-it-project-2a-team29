@@ -230,19 +230,37 @@ class LLMDetector(PIIDetector):
 
     @staticmethod
     def _locate_spans(entities: list[tuple[str, str]], content: str) -> list[PIISpan]:
-        """Retrouve toutes les occurrences de chaque texte détecté."""
+        """Retrouve les positions et vérifie leur cohérence avec le document."""
         spans: list[PIISpan] = []
+
         for text, pii_type in entities:
-            # (?<!\w) / (?!\w) : "Marie" ne doit pas matcher dans "Mariette"
             pattern = re.compile(r"(?<!\w)" + re.escape(text) + r"(?!\w)")
-            for match in pattern.finditer(content):
-                spans.append(
-                    PIISpan(
-                        text=text,
-                        type=pii_type,
-                        start=match.start(),
-                        end=match.end(),
-                        source_detector="LLMDetector",
-                    )
+            matches = list(pattern.finditer(content))
+
+            if not matches:
+                raise LLMInvalidResponseError(
+                    "Impossible de localiser une PII dans le document"
                 )
+
+            for match in matches:
+                span = PIISpan(
+                    text=text,
+                    type=pii_type,
+                    start=match.start(),
+                    end=match.end(),
+                    source_detector="LLMDetector",
+                )
+
+                if not (0 <= span.start < span.end <= len(content)):
+                    raise LLMInvalidResponseError(
+                        "Positions de PII invalides"
+                    )
+
+                if content[span.start:span.end] != span.text:
+                    raise LLMInvalidResponseError(
+                        "Incohérence entre les positions et le texte de la PII"
+                    )
+
+                spans.append(span)
+
         return sorted(spans, key=lambda s: s.start)

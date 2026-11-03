@@ -100,13 +100,12 @@ async def test_detect_aucune_pii():
     assert await detector.detect("Texte neutre.") == []
 
 
-async def test_detect_tolere_bloc_markdown_et_texte_autour():
+async def test_detect_rejette_bloc_markdown_et_texte_autour():
     reponse = 'Voici le résultat :\n```json\n' + entities(("Martin", "NOM")) + "\n```"
     detector = make_detector(reply_with(reponse))
 
-    spans = await detector.detect("M. Martin")
-
-    assert [s.text for s in spans] == ["Martin"]
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("M. Martin")
 
 
 # ---------------------------------------------------------------------------
@@ -114,32 +113,31 @@ async def test_detect_tolere_bloc_markdown_et_texte_autour():
 # ---------------------------------------------------------------------------
 
 
-async def test_entite_inventee_par_le_llm_est_ecartee():
+async def test_entite_inventee_par_le_llm_declenche_erreur():
     # "Dupont" n'est pas dans le document : le LLM l'a inventé
     detector = make_detector(reply_with(entities(("Dupont", "NOM"), ("Martin", "NOM"))))
 
-    spans = await detector.detect("M. Martin")
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("M. Martin")
 
-    assert [s.text for s in spans] == ["Martin"]
 
-
-async def test_type_hors_typologie_est_ecarte():
+async def test_type_hors_typologie_declenche_erreur():
     detector = make_detector(
         reply_with(entities(("Martin", "SUPER_ADMIN"), ("Rennes", "LIEU")))
     )
 
-    spans = await detector.detect("Martin à Rennes")
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Martin à Rennes")
 
-    assert [s.type for s in spans] == ["LIEU"]
 
-
-async def test_entites_mal_formees_sont_ecartees():
+async def test_entites_mal_formees_declenchent_erreur():
     reponse = json.dumps(
         {"entites": ["Martin", {"texte": 42, "type": "NOM"}, {"texte": "Rennes"}, None]}
     )
     detector = make_detector(reply_with(reponse))
 
-    assert await detector.detect("Martin à Rennes") == []
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Martin à Rennes")
 
 
 @pytest.mark.parametrize(
@@ -157,6 +155,15 @@ async def test_reponse_non_conforme_leve_une_erreur(reponse):
 
     with pytest.raises(LLMInvalidResponseError):
         await detector.detect("M. Martin")
+
+async def test_positions_incoherentes_declenchent_erreur():
+    # Le LLM renvoie "Marie", mais le document contient "Mariette"
+    detector = make_detector(
+        reply_with(entities(("Marie", "PRENOM")))
+    )
+
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Mariette habite à Rennes.")
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +295,30 @@ async def test_detection_service_mode_degrade_si_llm_en_panne():
     assert "[EMAIL_1]" in result
     assert "Martin" in result
 
+async def test_mode_degrade_si_reponse_llm_invalide():
+    # Le LLM invente un nom absent du document
+    llm = make_detector(
+        reply_with(entities(("Dupont", "NOM")))
+    )
+
+    service = DetectionService(
+        detectors=[RegexDetector(), llm],
+        strategy_factory=AnonymizationStrategyFactory(),
+        archive_repo=FakeArchiveRepository(),
+    )
+
+    result = await service.detect(
+        "Contact : marie@free.fr, M. Martin",
+        strategy_name="masking",
+        user_id=1,
+    )
+
+    # L'email est anonymisé grâce aux regex
+    assert "[EMAIL_1]" in result
+    assert "marie@free.fr" not in result
+
+    # Le nom reste visible puisque le LLM a été rejeté
+    assert "Martin" in result
 
 async def test_detection_service_fusionne_regex_et_llm():
     class SpyStrategy:
@@ -308,3 +339,34 @@ async def test_detection_service_fusionne_regex_et_llm():
     result = await service.detect("M. Martin : marie@free.fr", strategy_name="peu_importe", user_id=1)
 
     assert result == "LLMDetector:NOM,RegexDetector:EMAIL"
+
+
+
+async def test_detection_service_ignore_detecteur_en_erreur():
+    class FakeDetector:
+        async def detect(self, content):
+            raise LLMInvalidResponseError("Réponse invalide")
+
+    class FakeRegexDetector:
+        async def detect(self, content):
+            return [
+                PIISpan(
+                    text="marie@free.fr",
+                    type="EMAIL",
+                    start=0,
+                    end=13,
+                    source_detector="RegexDetector",
+                )
+            ]
+
+    service = DetectionService(
+        detectors=[FakeDetector(), FakeRegexDetector()],
+        strategy_factory=AnonymizationStrategyFactory(),
+        archive_repo=FakeArchiveRepository(),
+    )
+
+    spans, detectors_ok = await service._run_detectors("marie@free.fr")
+
+    assert len(spans) == 1
+    assert spans[0].type == "EMAIL"
+    assert detectors_ok == ["FakeRegexDetector"]
