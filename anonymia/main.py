@@ -9,6 +9,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from .dependencies import (
     build_archive_repository,
@@ -48,8 +49,6 @@ app = FastAPI(
 
 for router in routers:
     app.include_router(router)
-
-from fastapi.responses import RedirectResponse
 
 
 @app.get("/", include_in_schema=False)
