@@ -6,6 +6,7 @@ appellent les méthodes de ApiClient et ne font jamais de requête HTTP elles-m�
 Ainsi, si l'API change, un seul fichier est à modifier.
 """
 import os
+from datetime import date
 
 import httpx
 
@@ -67,9 +68,46 @@ class ApiClient:
         )
         return self._champ(reponse, "document_caviarde")
 
+    def journaux(
+        self,
+        utilisateur: str | None = None,
+        date_debut: date | None = None,
+        date_fin: date | None = None,
+    ) -> list[dict]:
+        """
+        GET /journaux : historique des traitements, du plus récent au plus ancien.
+
+        Réservé aux rôles SUPERVISOR et ADMIN (sinon ApiError 403). Les filtres sont facultatifs :
+        utilisateur (login) et jours de début et de fin (inclus, comptés en UTC par l'API).
+        """
+        parametres = {}
+        if utilisateur:
+            parametres["utilisateur"] = utilisateur
+        if date_debut:
+            parametres["date_debut"] = date_debut.isoformat()
+        if date_fin:
+            parametres["date_fin"] = date_fin.isoformat()
+        reponse = self._requete("GET", "/journaux", params=parametres)
+        return self._liste(reponse)
+
+    def utilisateurs(self) -> list[dict]:
+        """GET /admin/utilisateurs : liste des comptes (réservé aux ADMIN, sinon ApiError 403)."""
+        return self._liste(self._requete("GET", "/admin/utilisateurs"))
+
     # ------------------------------------------------------------------
     # Outils internes
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _liste(reponse: httpx.Response) -> list[dict]:
+        """Lit une réponse JSON qui doit être une liste, avec un message clair sinon."""
+        try:
+            donnees = reponse.json()
+        except ValueError as exc:
+            raise ApiError("Réponse inattendue de l'API.") from exc
+        if not isinstance(donnees, list):
+            raise ApiError("Réponse inattendue de l'API.")
+        return donnees
 
     @staticmethod
     def _champ(reponse: httpx.Response, nom: str):

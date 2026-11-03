@@ -12,6 +12,10 @@ import streamlit as st
 
 _CLE = "session"
 
+# Rôles autorisés à consulter l'historique. Ce n'est qu'un confort d'affichage :
+# l'API refuse de toute façon l'accès aux autres rôles (erreur 403).
+ROLES_HISTORIQUE = ("SUPERVISOR", "ADMIN")
+
 
 def ouvrir(token: str) -> None:
     """Enregistre l'utilisateur connecté à partir du jeton renvoyé par l'API."""
