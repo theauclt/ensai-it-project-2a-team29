@@ -6,6 +6,7 @@ import httpx
 
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
+from ..service.prompt_injection_detector import PromptInjectionDetector
 
 # Ca serait bien de renvoyer un span personne plutot que nom et prenom separé
 
@@ -95,34 +96,54 @@ class LLMInvalidResponseError(LLMDetectorError):
     """La réponse du LLM ne respecte pas le schéma attendu."""
 
 
+
 class LLMDetector(PIIDetector):
     """
-    Détecte les PII dépendantes du contexte
-    (Nom, date de naissance, etc) par LLM.
-
-    Le LLM renvoie uniquement les textes détectés ; les positions sont
-    retrouvées ici, en Python (un LLM lit des tokens, pas des caractères).
+    Détecte les PII dépendantes du contexte par LLM.
+    Détecte également les tentatives potentielles de prompt injection
+    avant l'appel au LLM.
     """
 
     def __init__(self, client: httpx.AsyncClient, model: str):
         """
-        client : client httpx déjà configuré (base_url, en-têtes, timeout),
-                 construit dans dependencies.py (composition root).
+        client : client httpx déjà configuré.
+        model : modèle LLM utilisé.
         """
         self._client = client
         self._model = model
 
+        # Initialisation du détecteur de prompt injection
+        self._injection_detector = PromptInjectionDetector()
+
     async def aclose(self) -> None:
-        """Ferme le client HTTP (à appeler à l'arrêt de l'application)."""
+        """Ferme le client HTTP."""
         await self._client.aclose()
 
     async def detect(self, content: str) -> list[PIISpan]:
+        """
+        Détecte les données personnelles dans un document.
+        Le filtre de prompt injection est exécuté avant l'appel au LLM.
+        """
+
         if not content.strip():
             return []
 
+        # 1. Détection des tentatives potentielles de prompt injection
+        injection_result = self._injection_detector.analyze(content)
+
+        # Le traitement continue même si un motif suspect est détecté.
+        # La journalisation est déjà effectuée par PromptInjectionDetector.
+
+        # 2. Appel au LLM pour détecter les données personnelles
         raw = await self._call_llm(content)
+
+        # 3. Extraction et vérification du JSON
         data = self._extract_json(raw)
+
+        # 4. Validation des entités retournées
         entities = self._validate_entities(data, content)
+
+        # 5. Récupération des positions des données personnelles
         return self._locate_spans(entities, content)
 
     # ------------------------------------------------------------------
@@ -130,28 +151,45 @@ class LLMDetector(PIIDetector):
     # ------------------------------------------------------------------
 
     async def _call_llm(self, content: str) -> str:
-        # Le document ne doit pas pouvoir fermer lui-même la balise de délimitation
+        # Le document ne doit pas pouvoir fermer lui-même la balise
+        # de délimitation.
         safe_content = content.replace("</document>", "</ document>")
+
         payload = {
             "model": self._model,
             "temperature": 0,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": USER_TEMPLATE.format(document=safe_content)},
+                {
+                    "role": "user",
+                    "content": USER_TEMPLATE.format(document=safe_content)
+                },
             ],
         }
+
         try:
-            response = await self._client.post("/chat/completions", json=payload)
+            response = await self._client.post(
+                "/chat/completions",
+                json=payload
+            )
             response.raise_for_status()
             message = response.json()["choices"][0]["message"]["content"]
+
         except httpx.HTTPError as exc:
-            # on ne conserve que le type d'erreur, jamais le contenu du document
-            raise LLMUnavailableError(f"LLM indisponible : {type(exc).__name__}") from exc
+            raise LLMUnavailableError(
+                f"LLM indisponible : {type(exc).__name__}"
+            ) from exc
+
         except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise LLMInvalidResponseError("Enveloppe de réponse inattendue") from exc
+            raise LLMInvalidResponseError(
+                "Enveloppe de réponse inattendue"
+            ) from exc
 
         if not isinstance(message, str):
-            raise LLMInvalidResponseError("Contenu de réponse vide ou non textuel")
+            raise LLMInvalidResponseError(
+                "Contenu de réponse vide ou non textuel"
+            )
+
         return message
 
     # ------------------------------------------------------------------
@@ -161,25 +199,37 @@ class LLMDetector(PIIDetector):
     @staticmethod
     def _extract_json(raw: str) -> dict:
         """Vérifie que la réponse du LLM est un objet JSON valide."""
-        try: 
+
+        try:
             data = json.loads(raw)
-        except json.JSONDecodeError as exc: 
-            raise LLMInvalidResponseError("Réponse du LLM non conforme (JSON attendu)") from exc
 
-        if not isinstance(data, dict): 
-            raise LLMInvalidResponseError("La réponse du LLM doit être un objet JSON")
+        except json.JSONDecodeError as exc:
+            raise LLMInvalidResponseError(
+                "Réponse du LLM non conforme (JSON attendu)"
+            ) from exc
 
-        if set(data.keys())!= {"entites"}:
-            raise LLMInvalidResponseError("Le JSON doit contenir uniquement la clé 'entites'")
+        if not isinstance(data, dict):
+            raise LLMInvalidResponseError(
+                "La réponse du LLM doit être un objet JSON"
+            )
+
+        if set(data.keys()) != {"entites"}:
+            raise LLMInvalidResponseError(
+                "Le JSON doit contenir uniquement la clé 'entites'"
+            )
 
         return data
 
     @staticmethod
-    def _validate_entities(data: dict, content: str) -> list[tuple[str, str]]:
+    def _validate_entities(
+        data: dict,
+        content: str
+    ) -> list[tuple[str, str]]:
         """
-        Vérifie le schéma, les types de PII et leur présence dans le document.
-        Toute entité invalide entraîne le rejet de la réponse du LLM.
+        Vérifie le schéma, les types de PII et leur présence
+        dans le document.
         """
+
         entities = data.get("entites")
 
         if not isinstance(entities, list):
@@ -191,6 +241,7 @@ class LLMDetector(PIIDetector):
         seen: set[tuple[str, str]] = set()
 
         for item in entities:
+
             if not isinstance(item, dict):
                 raise LLMInvalidResponseError(
                     "Une entité doit être un objet JSON"
@@ -229,12 +280,20 @@ class LLMDetector(PIIDetector):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _locate_spans(entities: list[tuple[str, str]], content: str) -> list[PIISpan]:
-        """Retrouve les positions et vérifie leur cohérence avec le document."""
+    def _locate_spans(
+        entities: list[tuple[str, str]],
+        content: str
+    ) -> list[PIISpan]:
+        """Retrouve les positions et vérifie leur cohérence."""
+
         spans: list[PIISpan] = []
 
         for text, pii_type in entities:
-            pattern = re.compile(r"(?<!\w)" + re.escape(text) + r"(?!\w)")
+
+            pattern = re.compile(
+                r"(?<!\w)" + re.escape(text) + r"(?!\w)"
+            )
+
             matches = list(pattern.finditer(content))
 
             if not matches:
@@ -243,6 +302,7 @@ class LLMDetector(PIIDetector):
                 )
 
             for match in matches:
+
                 span = PIISpan(
                     text=text,
                     type=pii_type,
