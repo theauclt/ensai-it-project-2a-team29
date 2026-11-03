@@ -47,7 +47,7 @@ l'environnement (source .venv/bin/activate) a chaque nouveau terminal.
 3. CONFIGURATION (fichier .env)
 --------------------------------------------------------------------------------
 
-    cp .env.example .env
+    cp .env.exemple .env
 
 Ouvrez .env et renseignez :
 
