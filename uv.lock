@@ -31,6 +31,7 @@ dependencies = [
     { name = "phonenumbers" },
     { name = "psycopg2-binary" },
     { name = "pyjwt" },
+    { name = "python-dotenv" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -51,6 +52,7 @@ requires-dist = [
     { name = "pyjwt", specifier = ">=2.8" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.0.2" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "python-dotenv", specifier = ">=1.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
 ]

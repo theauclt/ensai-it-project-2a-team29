@@ -160,60 +160,68 @@ class LLMDetector(PIIDetector):
 
     @staticmethod
     def _extract_json(raw: str) -> dict:
-        """Parse la réponse ; tolère les blocs ```json et le texte autour de l'objet."""
-        text = raw.strip()
-        candidates = [text]
-        start, end = text.find("{"), text.rfind("}")
-        if start != -1 and end > start:
-            candidates.append(text[start: end + 1])
+        """Vérifie que la réponse du LLM est un objet JSON valide."""
+        try: 
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc: 
+            raise LLMInvalidResponseError("Réponse du LLM non conforme (JSON attendu)") from exc
 
-        for candidate in candidates:
-            try:
-                data = json.loads(candidate)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, dict):
-                return data
-        raise LLMInvalidResponseError("Réponse du LLM non conforme (JSON attendu)")
+        if not isinstance(data, dict): 
+            raise LLMInvalidResponseError("La réponse du LLM doit être un objet JSON")
+
+        if set(data.keys())!= {"entites"}:
+            raise LLMInvalidResponseError("Le JSON doit contenir uniquement la clé 'entites'")
+
+        return data
 
     @staticmethod
     def _validate_entities(data: dict, content: str) -> list[tuple[str, str]]:
         """
-        Vérifie le schéma, la typologie et la présence de chaque texte dans le
-        document original. Une réponse mal formée lève une erreur (mode dégradé) ;
-        une entité isolée invalide (type inconnu, texte inventé) est simplement écartée.
+        Vérifie le schéma, les types de PII et leur présence dans le document.
+        Toute entité invalide entraîne le rejet de la réponse du LLM.
         """
         entities = data.get("entites")
+
         if not isinstance(entities, list):
-            raise LLMInvalidResponseError("Clé 'entites' absente ou invalide")
+            raise LLMInvalidResponseError(
+                "Clé 'entites' absente ou invalide"
+            )
 
         valid: list[tuple[str, str]] = []
         seen: set[tuple[str, str]] = set()
-        rejected = 0
 
         for item in entities:
             if not isinstance(item, dict):
-                rejected += 1
-                continue
-            text, pii_type = item.get("texte"), item.get("type")
-            if (
-                not isinstance(text, str)
-                or not isinstance(pii_type, str)
-                or pii_type not in ALLOWED_TYPES
-            ):
-                rejected += 1
-                continue
-            text = text.strip()
-            if not text or text not in content:
-                rejected += 1
-                continue
+                raise LLMInvalidResponseError(
+                    "Une entité doit être un objet JSON"
+                )
+
+            if set(item.keys()) != {"texte", "type"}:
+                raise LLMInvalidResponseError(
+                    "Champs d'une entité non conformes"
+                )
+
+            text, pii_type = item["texte"], item["type"]
+
+            if not isinstance(text, str) or not isinstance(pii_type, str):
+                raise LLMInvalidResponseError(
+                    "Le texte et le type doivent être des chaînes de caractères"
+                )
+
+            if pii_type not in ALLOWED_TYPES:
+                raise LLMInvalidResponseError(
+                    "Type de PII non autorisé"
+                )
+
+            if not text or text != text.strip() or text not in content:
+                raise LLMInvalidResponseError(
+                    "Texte de PII absent ou non conforme au document"
+                )
+
             if (text, pii_type) not in seen:
                 seen.add((text, pii_type))
                 valid.append((text, pii_type))
 
-        if rejected:
-            # compteur uniquement : jamais le contenu des entités
-            logger.warning("LLMDetector : %d entité(s) écartée(s) par le vérificateur", rejected)
         return valid
 
     # ------------------------------------------------------------------

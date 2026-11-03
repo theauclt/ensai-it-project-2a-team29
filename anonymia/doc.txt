@@ -168,6 +168,47 @@ Aucun outil a installer : tout se fait dans la page.
                                               archives (preferer la desactivation)
    L'id se lit dans la reponse de GET /admin/utilisateurs.
 
+4) Se connecter avec un autre compte (par exemple un simple utilisateur)
+
+   Swagger affiche toujours toutes les routes, quel que soit le compte. Ce qui
+   change, c'est le jeton donne a "Authorize" : l'API lit le role dans ce jeton
+   et renvoie 403 pour ce que le role n'autorise pas.
+
+   Il n'y a pas d'inscription : un compte USER est cree par l'administrateur.
+   Exemple, pour tester en tant qu'utilisateur :
+
+   a) Se connecter en admin
+      - POST /auth/connexion avec {"login": "admin", "mot_de_passe": "..."},
+        en reprenant ADMIN_PASSWORD du fichier .env.
+      - Copier l'access_token, cliquer sur "Authorize", le coller, puis
+        "Authorize" et "Close".
+
+   b) Creer le compte utilisateur
+      - POST /admin/utilisateurs avec par exemple :
+            {"login": "alice", "mot_de_passe": "unmotdepasse1", "role": "USER"}
+      - Attendu : 201. Login et mot de passe au choix (8 caracteres minimum).
+
+   c) Se deconnecter de l'admin
+      - "Authorize", puis "Logout", puis "Close".
+
+   d) Se connecter avec le nouveau compte
+      - POST /auth/connexion avec
+            {"login": "alice", "mot_de_passe": "unmotdepasse1"}
+      - Copier le nouvel access_token.
+
+   e) Autoriser ce jeton
+      - "Authorize", coller le nouveau jeton, puis "Authorize" et "Close".
+
+   L'API voit maintenant un utilisateur. Pour le verifier :
+      - GET /admin/utilisateurs  -> 403 (reserve aux administrateurs)
+      - GET /journaux            -> 403 (reserve aux superviseurs et admins)
+      - POST /documents/caviarder -> 200
+
+   Si GET /admin/utilisateurs renvoie 200, Swagger utilise encore le jeton de
+   l'admin : refaire c), d) et e). Le champ "role" du jeton se lit en le
+   collant sur jwt.io. Pour tester le role SUPERVISOR, meme demarche avec
+   "role": "SUPERVISOR" en b).
+
 
 --------------------------------------------------------------------------------
 7. SCENARIOS A TESTER ET RESULTATS ATTENDUS
