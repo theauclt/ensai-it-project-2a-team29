@@ -15,9 +15,9 @@ import bcrypt
 import psycopg2
 from dotenv import load_dotenv
 
-load_dotenv()  # doit précéder l'import de DBConnection (lit POSTGRES_* à la création)
-
 from anonymia.persistence.dao.db_connexion import DBConnection
+
+load_dotenv()  # doit précéder l'import de DBConnection (lit POSTGRES_* à la création)
 
 ROLES = ("USER", "SUPERVISOR", "ADMIN")
 
