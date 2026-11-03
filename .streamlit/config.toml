@@ -1,0 +1,14 @@
+# Configuration de l'interface Streamlit.
+# Streamlit lit ce fichier dans le dossier d'où l'on lance `streamlit run` (la racine du dépôt).
+
+[server]
+# Taille maximale d'un fichier importé, en Mo. Un document fait au plus 100 000 caractères
+# (limite de l'API) : 1 Mo suffit largement et évite d'accepter des fichiers énormes.
+maxUploadSize = 1
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Masque le menu "Deploy" de Streamlit, inutile pour cette application
+toolbarMode = "minimal"
