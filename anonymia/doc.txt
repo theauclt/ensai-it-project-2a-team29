@@ -62,6 +62,14 @@ Ouvrez .env et renseignez :
 
     LLM_ENABLED=false
         -> pour un premier test avec les expressions regulieres seules.
+    
+    Pour utiliser LLM 
+        -> se connecter sur https://llm.lab.sspcloud.fr/
+            dans profil copie cle acces et la coller dans LLM_API_KEY
+            renseigner LLM_MODEL=qwen3-8-27b
+            LLM_ENABLED=true
+            
+
 
 Le fichier .env est ignore par Git : ne le partagez jamais (mots de passe, cles).
 
@@ -94,10 +102,6 @@ aussi. Ce script ajoute un traitement fictif dans l'historique a chaque appel.
 --------------------------------------------------------------------------------
 
 En local :
-
-    uvicorn anonymia.main:app --reload
-
-    -> documentation interactive : http://localhost:8000/docs
 
 Sur le Datalab (VSCode), l'API passe par un proxy : il faut ajouter le prefixe,
 sinon la page /docs affiche "Failed to load API definition" :
