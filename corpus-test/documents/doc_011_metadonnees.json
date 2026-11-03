@@ -1,0 +1,12 @@
+{
+    "entities" : [
+        {
+            "text": "Pierre",
+            "type": "Prenom"
+        },
+        {
+            "text": "Dupont",
+            "type": "Nom"
+        }
+    ]
+}
