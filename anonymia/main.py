@@ -35,6 +35,12 @@ async def lifespan(app: FastAPI):
     app.state.history_service = build_history_service(archive_repo, user_repo)
     app.state.auth_service = build_auth_service(user_repo)
 
+    # F1 : compte administrateur initial, créé une seule fois (sans effet s'il existe)
+    admin_login = os.environ.get("ADMIN_LOGIN")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if admin_login and admin_password:
+        await app.state.auth_service.creer_admin_initial(admin_login, admin_password)
+
     yield
 
     await app.state.detection_service.aclose()  # ferme le client HTTP du LLM

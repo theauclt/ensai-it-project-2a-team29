@@ -29,3 +29,6 @@ class FakeUserRepository(UserRepository):
 
     async def find_by_login(self, login: str) -> User | None:
         return self.users.get(login)
+
+    async def create(self, login: str, password_hash: str, role: str) -> None:
+        self.users[login] = User(len(self.users) + 1, login, password_hash, role)

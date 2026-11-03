@@ -24,6 +24,16 @@ class PostgresUserRepository(UserRepository):
 
         return self._to_user(row)
 
+    async def create(self, login: str, password_hash: str, role: str) -> None:
+        query = "INSERT INTO users (username, mdp_hash, role) VALUES (%s, %s, %s)"
+        try:
+            with self.__connection.cursor() as cur:
+                cur.execute(query, (login, password_hash, role))
+            self.__connection.commit()
+        except Exception:
+            self.__connection.rollback()
+            raise
+
     def _to_user(self, row: dict) -> User:
         return User(
             id=row["id"],

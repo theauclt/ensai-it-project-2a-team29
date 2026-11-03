@@ -12,6 +12,8 @@ class AuthentificationService:
     et vérifie ensuite son mot de passe.
     """
 
+    MOT_DE_PASSE_MIN = 8
+
     def __init__(self, user_repository: UserRepository) -> None:
         self.__user_repository = user_repository
 
@@ -44,6 +46,29 @@ class AuthentificationService:
             return None
 
         return user
+
+    async def creer_admin_initial(self, login: str, mot_de_passe: str) -> bool:
+        """
+        Crée le compte administrateur initial s'il n'existe pas encore.
+
+        Appelée à chaque démarrage : si le login existe déjà, rien n'est
+        modifié (le mot de passe éventuellement changé depuis est conservé).
+
+        Returns:
+            bool: True si le compte a été créé, False s'il existait déjà.
+        """
+        if len(mot_de_passe) < self.MOT_DE_PASSE_MIN:
+            raise ValueError(
+                f"ADMIN_PASSWORD trop court ({self.MOT_DE_PASSE_MIN} caractères minimum)"
+            )
+        if await self.__user_repository.find_by_login(login) is not None:
+            return False
+
+        password_hash = bcrypt.hashpw(
+            mot_de_passe.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+        await self.__user_repository.create(login, password_hash, "ADMIN")
+        return True
 
     @staticmethod
     def __verifier_mot_de_passe(

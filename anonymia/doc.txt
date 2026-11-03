@@ -47,7 +47,7 @@ l'environnement (source .venv/bin/activate) a chaque nouveau terminal.
 3. CONFIGURATION (fichier .env)
 --------------------------------------------------------------------------------
 
-    cp .env.example .env
+    cp .env.exemple .env
 
 Ouvrez .env et renseignez :
 
@@ -59,6 +59,12 @@ Ouvrez .env et renseignez :
         -> une cle secrete, a generer avec :
            python -c "import secrets; print(secrets.token_urlsafe(32))"
            Sans elle, l'API refuse de demarrer.
+
+    ADMIN_LOGIN, ADMIN_PASSWORD
+        -> le compte administrateur initial (facultatif). S'ils sont renseignes,
+           l'API cree ce compte au demarrage, avec le role ADMIN, s'il n'existe
+           pas encore. Mot de passe : 8 caracteres minimum. Au demarrage suivant,
+           le compte existe deja : il n'est pas modifie.
 
     LLM_ENABLED=false
         -> pour un premier test avec les expressions regulieres seules.
@@ -74,10 +80,15 @@ Creer les tables :
 
     python -m anonymia.data.init_db
 
-Creer un compte par role (le mot de passe est demande au clavier, 8 caracteres
-minimum) :
+Le compte administrateur est cree automatiquement au demarrage de l'API si
+ADMIN_LOGIN et ADMIN_PASSWORD sont dans .env (partie 3). Sans ces variables,
+le creer a la main :
 
     python -m scripts.create_user admin ADMIN
+
+Creer les autres comptes (le mot de passe est demande au clavier, 8 caracteres
+minimum) :
+
     python -m scripts.create_user sup SUPERVISOR
     python -m scripts.create_user alice USER
 
@@ -239,6 +250,12 @@ mentionne alors que RegexDetector.
 L'API ne demarre pas : "Variable d'environnement manquante : JWT_SECRET"
     -> Renseigner JWT_SECRET dans .env (partie 3).
 
+L'API ne demarre pas : "ADMIN_PASSWORD trop court"
+    -> Le mot de passe de ADMIN_PASSWORD doit faire 8 caracteres minimum.
+
+L'API ne demarre pas au premier lancement, erreur sur la table "users"
+    -> Les tables n'existent pas : lancer init_db avant (partie 4).
+
 KeyError: 'POSTGRES_HOST' (ou autre variable POSTGRES_*)
     -> .env absent ou incomplet, ou commande lancee hors de la racine du depot.
 
@@ -265,7 +282,8 @@ pip install : erreur sur un paquet "installe par le systeme"
 
 Pas encore disponible :
 - inscription, deconnexion et gestion des comptes par l'administrateur
-  (les comptes se creent avec scripts/create_user.py)
+  (seul l'administrateur initial est cree par l'API, via ADMIN_LOGIN et
+  ADMIN_PASSWORD ; les autres comptes se creent avec scripts/create_user.py)
 - detail d'un traitement (/journaux/{id})
 - interface graphique (Streamlit)
 - pre-filtre contre l'injection de prompt (seuls le prompt strict et la
