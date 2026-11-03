@@ -51,6 +51,19 @@ def exiger_connexion() -> dict:
     return session
 
 
+def afficher_erreur_api(erreur: Exception) -> None:
+    """
+    Affiche une erreur de l'API à l'utilisateur.
+
+    Sur un 401 (jeton refusé ou expiré), on déconnecte et on renvoie à la connexion.
+    """
+    if getattr(erreur, "status_code", None) == 401:
+        deconnecter()
+        st.session_state["message_connexion"] = "Votre session n'est plus valide, merci de vous reconnecter."
+        st.rerun()
+    st.error(str(erreur))
+
+
 def deconnecter() -> None:
     """Oublie l'utilisateur connecté."""
     st.session_state.pop(_CLE, None)

@@ -45,9 +45,39 @@ class ApiClient:
         except (ValueError, KeyError) as exc:
             raise ApiError("Réponse inattendue de l'API.") from exc
 
+    def strategies(self) -> list[str]:
+        """GET /documents/strategies : noms des stratégies de caviardage disponibles."""
+        reponse = self._requete("GET", "/documents/strategies")
+        return self._champ(reponse, "strategies")
+
+    def analyser(self, contenu: str) -> list[dict]:
+        """
+        POST /documents/analyser : liste des PII détectées.
+
+        Chaque élément est un dictionnaire avec les clés texte, type, debut, fin, detecteur.
+        Aucune trace n'est archivée côté API pour une simple analyse.
+        """
+        reponse = self._requete("POST", "/documents/analyser", json={"contenu": contenu})
+        return self._champ(reponse, "pii")
+
+    def caviarder(self, contenu: str, strategie: str) -> str:
+        """POST /documents/caviarder : renvoie le document caviardé (le traitement est archivé)."""
+        reponse = self._requete(
+            "POST", "/documents/caviarder", json={"contenu": contenu, "strategie": strategie}
+        )
+        return self._champ(reponse, "document_caviarde")
+
     # ------------------------------------------------------------------
     # Outils internes
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _champ(reponse: httpx.Response, nom: str):
+        """Lit un champ de la réponse JSON, avec un message clair si elle est inattendue."""
+        try:
+            return reponse.json()[nom]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ApiError("Réponse inattendue de l'API.") from exc
 
     def _requete(self, methode: str, chemin: str, **kwargs) -> httpx.Response:
         """Envoie une requête (avec le jeton s'il existe) et traduit les erreurs en ApiError."""
@@ -55,6 +85,10 @@ class ApiClient:
         try:
             with httpx.Client(base_url=self._base_url, timeout=TIMEOUT_SECONDES, transport=self._transport) as client:
                 reponse = client.request(methode, chemin, headers=entetes, **kwargs)
+        except httpx.TimeoutException as exc:
+            raise ApiError(
+                "L'API a mis trop de temps à répondre (le LLM est peut-être lent). Réessayez."
+            ) from exc
         except httpx.HTTPError as exc:
             raise ApiError("Impossible de joindre l'API. Est-elle bien lancée ?") from exc
 

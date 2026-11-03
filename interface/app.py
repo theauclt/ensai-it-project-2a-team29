@@ -15,16 +15,17 @@ st.set_page_config(page_title="Anonymia", page_icon="🔒", layout="wide")
 
 # Les chemins des pages sont relatifs à ce fichier
 page_connexion = st.Page("vues/connexion.py", title="Connexion", icon="🔑")
-page_accueil = st.Page("vues/accueil.py", title="Accueil", icon="🏠", default=True)
+page_caviardage = st.Page("vues/caviardage.py", title="Caviardage", icon="✂️", default=True)
 
 utilisateur = session.courante()
 
 if utilisateur is None:
     pages = [page_connexion]
 else:
-    # Les pages Caviardage, Historique et Administration seront ajoutées ici
-    # aux étapes suivantes, chacune réservée aux rôles concernés.
-    pages = [page_accueil]
+    # Pages ouvertes à tous les utilisateurs connectés.
+    # Les pages Historique et Administration seront ajoutées ici aux étapes suivantes,
+    # chacune réservée aux rôles concernés.
+    pages = [page_caviardage]
 
     with st.sidebar:
         st.caption(f"Connecté : **{utilisateur['login']}** ({utilisateur['role']})")
