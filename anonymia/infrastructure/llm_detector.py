@@ -6,7 +6,7 @@ import httpx
 
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
-from ..service.prompt_injection_detector import PromptInjectionDetector
+from ..service.prompt_injector_detector import PromptInjectionDetector
 
 # Ca serait bien de renvoyer un span personne plutot que nom et prenom separé
 
