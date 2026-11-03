@@ -110,3 +110,43 @@ async def test_authentification_compte_desactive(
 
     # THEN
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_creer_admin_initial_cree_le_compte():
+    from tests.fakes import FakeUserRepository
+
+    repo = FakeUserRepository()
+    service = AuthentificationService(repo)
+
+    assert await service.creer_admin_initial("admin", "motdepasse123") is True
+
+    admin = repo.users["admin"]
+    assert admin.role == "ADMIN"
+    assert admin.password_hash != "motdepasse123"
+    assert await service.authentifier("admin", "motdepasse123") is admin
+
+
+@pytest.mark.asyncio
+async def test_creer_admin_initial_est_idempotent():
+    from tests.fakes import FakeUserRepository
+
+    repo = FakeUserRepository()
+    service = AuthentificationService(repo)
+    await service.creer_admin_initial("admin", "motdepasse123")
+    hash_initial = repo.users["admin"].password_hash
+
+    assert await service.creer_admin_initial("admin", "autremotdepasse") is False
+    assert repo.users["admin"].password_hash == hash_initial
+
+
+@pytest.mark.asyncio
+async def test_creer_admin_initial_refuse_mot_de_passe_trop_court():
+    from tests.fakes import FakeUserRepository
+
+    repo = FakeUserRepository()
+    service = AuthentificationService(repo)
+
+    with pytest.raises(ValueError):
+        await service.creer_admin_initial("admin", "court")
+    assert repo.users == {}

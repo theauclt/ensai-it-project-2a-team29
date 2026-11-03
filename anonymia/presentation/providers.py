@@ -6,6 +6,7 @@ rangés dans app.state. Les tests les remplacent avec dependency_overrides.
 """
 from fastapi import Request
 
+from ..service.admin_service import AdminService
 from ..service.authentification_service import AuthentificationService
 from ..service.detection_service import DetectionService
 from ..service.history_service import HistoryService
@@ -21,3 +22,7 @@ def get_history_service(request: Request) -> HistoryService:
 
 def get_auth_service(request: Request) -> AuthentificationService:
     return request.app.state.auth_service
+
+
+def get_admin_service(request: Request) -> AdminService:
+    return request.app.state.admin_service

@@ -67,3 +67,33 @@ class TraitementResponse(BaseModel):
     strategie_anonymisation: str
     detecteurs_contributeurs: str
     nb_pii_detectees: int
+
+
+class CreerUtilisateurRequest(BaseModel):
+    """Corps de POST /admin/utilisateurs."""
+
+    login: str = Field(min_length=1, max_length=255)
+    mot_de_passe: str = Field(min_length=1, max_length=128)
+    role: str
+
+
+class ChangerRoleRequest(BaseModel):
+    """Corps de PATCH /admin/utilisateurs/{id}/role."""
+
+    role: str
+
+
+class ActivationRequest(BaseModel):
+    """Corps de PATCH /admin/utilisateurs/{id}/activation."""
+
+    est_active: bool
+
+
+class UtilisateurResponse(BaseModel):
+    """Un compte : jamais le hash du mot de passe."""
+
+    id: int
+    login: str
+    role: str
+    est_active: bool
+    date_creation: datetime | None = None
