@@ -160,21 +160,19 @@ class LLMDetector(PIIDetector):
 
     @staticmethod
     def _extract_json(raw: str) -> dict:
-        """Parse la réponse ; tolère les blocs ```json et le texte autour de l'objet."""
-        text = raw.strip()
-        candidates = [text]
-        start, end = text.find("{"), text.rfind("}")
-        if start != -1 and end > start:
-            candidates.append(text[start: end + 1])
+        """Vérifie que la réponse du LLM est un objet JSON valide."""
+        try: 
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc: 
+            raise LLMInvalidResponseError("Réponse du LLM non conforme (JSON attendu)") from exc
 
-        for candidate in candidates:
-            try:
-                data = json.loads(candidate)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, dict):
-                return data
-        raise LLMInvalidResponseError("Réponse du LLM non conforme (JSON attendu)")
+        if not isinstance(data, dict): 
+            raise LLMInvalidResponseError("La réponse du LLM doit être un objet JSON")
+
+        if set(data.keys())!= {"entites"}:
+            raise LLMInvalidResponseError("Le JSON doit contenir uniquement la clé 'entites'")
+
+        return data
 
     @staticmethod
     def _validate_entities(data: dict, content: str) -> list[tuple[str, str]]:
