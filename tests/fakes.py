@@ -29,3 +29,23 @@ class FakeUserRepository(UserRepository):
 
     async def find_by_login(self, login: str) -> User | None:
         return self.users.get(login)
+
+    async def find_by_id(self, user_id: int) -> User | None:
+        return next((u for u in self.users.values() if u.id == user_id), None)
+
+    async def find_all(self) -> list[User]:
+        return sorted(self.users.values(), key=lambda u: u.id)
+
+    async def create(self, login: str, password_hash: str, role: str) -> None:
+        next_id = max((u.id for u in self.users.values()), default=0) + 1
+        self.users[login] = User(next_id, login, password_hash, role)
+
+    async def update_role(self, user_id: int, role: str) -> None:
+        (await self.find_by_id(user_id)).role = role
+
+    async def set_active(self, user_id: int, est_active: bool) -> None:
+        (await self.find_by_id(user_id)).est_active = est_active
+
+    async def delete(self, user_id: int) -> None:
+        user = await self.find_by_id(user_id)
+        del self.users[user.login]

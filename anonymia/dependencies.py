@@ -12,6 +12,7 @@ from .infrastructure.llm_detector import LLMDetector
 from .infrastructure.regex_detector import RegexDetector
 from .persistence.postgres_archive_repository import PostgresArchiveRepository
 from .persistence.postgres_user_repository import PostgresUserRepository
+from .service.admin_service import AdminService
 from .service.authentification_service import AuthentificationService
 from .service.detection_service import DetectionService
 from .service.history_service import HistoryService
@@ -74,3 +75,8 @@ def build_history_service(
 def build_auth_service(user_repo: UserRepository) -> AuthentificationService:
     """Assemble le service d'authentification (utilisé via Depends dans les routes)."""
     return AuthentificationService(user_repo)
+
+
+def build_admin_service(user_repo: UserRepository) -> AdminService:
+    """Assemble le service de gestion des comptes (administrateurs)."""
+    return AdminService(user_repo)

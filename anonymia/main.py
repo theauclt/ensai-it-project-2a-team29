@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .dependencies import (
+    build_admin_service,
     build_archive_repository,
     build_auth_service,
     build_detection_service,
@@ -34,6 +35,13 @@ async def lifespan(app: FastAPI):
     app.state.detection_service = build_detection_service(archive_repo, with_llm=with_llm)
     app.state.history_service = build_history_service(archive_repo, user_repo)
     app.state.auth_service = build_auth_service(user_repo)
+    app.state.admin_service = build_admin_service(user_repo)
+
+    # F1 : compte administrateur initial, créé une seule fois (sans effet s'il existe)
+    admin_login = os.environ.get("ADMIN_LOGIN")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if admin_login and admin_password:
+        await app.state.auth_service.creer_admin_initial(admin_login, admin_password)
 
     yield
 

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from anonymia.infrastructure.anonymization_strategy_factory import AnonymizationStrategyFactory
 from anonymia.infrastructure.regex_detector import RegexDetector
 from anonymia.presentation.routes import routers
+from anonymia.service.admin_service import AdminService
 from anonymia.service.authentification_service import AuthentificationService
 from anonymia.service.business_objects.audit_entry import AuditEntry
 from anonymia.service.business_objects.user import User
@@ -53,6 +54,7 @@ def client(archive):
     )
     app.state.history_service = HistoryService(archive, users)
     app.state.auth_service = AuthentificationService(users)
+    app.state.admin_service = AdminService(users)
     return TestClient(app)
 
 
@@ -279,3 +281,112 @@ def test_les_dates_sans_fuseau_de_la_base_sont_renvoyees_en_utc(client, archive)
     response = client.get("/journaux", headers=en_tete(client, "sup"))
 
     assert response.json()[0]["date_traitement"].endswith(("Z", "+00:00"))
+
+
+# ---------------------------------------------------------------------------
+# Administration des comptes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("login", ["alice", "sup"])
+def test_admin_routes_interdites_aux_non_admins(client, login):
+    h = en_tete(client, login)
+
+    assert client.get("/admin/utilisateurs", headers=h).status_code == 403
+    assert client.post(
+        "/admin/utilisateurs", headers=h,
+        json={"login": "n", "mot_de_passe": MOT_DE_PASSE, "role": "USER"},
+    ).status_code == 403
+    assert client.patch(
+        "/admin/utilisateurs/1/role", headers=h, json={"role": "ADMIN"}
+    ).status_code == 403
+    assert client.patch(
+        "/admin/utilisateurs/1/activation", headers=h, json={"est_active": False}
+    ).status_code == 403
+    assert client.delete("/admin/utilisateurs/1", headers=h).status_code == 403
+
+
+def test_admin_routes_sans_jeton_401(client):
+    assert client.get("/admin/utilisateurs").status_code == 401
+
+
+def test_admin_lister_ne_renvoie_jamais_le_hash(client):
+    response = client.get("/admin/utilisateurs", headers=en_tete(client, "admin"))
+
+    assert response.status_code == 200
+    assert [u["login"] for u in response.json()] == ["alice", "sup", "admin", "ancien"]
+    assert "password_hash" not in response.text
+    assert "mdp_hash" not in response.text
+
+
+def test_admin_creer_puis_se_connecter(client):
+    h = en_tete(client, "admin")
+
+    response = client.post(
+        "/admin/utilisateurs", headers=h,
+        json={"login": "bob", "mot_de_passe": "unmotdepasse1", "role": "SUPERVISOR"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["role"] == "SUPERVISOR"
+    assert connecter(client, "bob", "unmotdepasse1").status_code == 200
+
+
+def test_admin_creer_erreurs(client):
+    h = en_tete(client, "admin")
+
+    doublon = client.post(
+        "/admin/utilisateurs", headers=h,
+        json={"login": "alice", "mot_de_passe": MOT_DE_PASSE, "role": "USER"},
+    )
+    court = client.post(
+        "/admin/utilisateurs", headers=h,
+        json={"login": "bob", "mot_de_passe": "court", "role": "USER"},
+    )
+    role = client.post(
+        "/admin/utilisateurs", headers=h,
+        json={"login": "bob", "mot_de_passe": MOT_DE_PASSE, "role": "ROOT"},
+    )
+
+    assert doublon.status_code == 409
+    assert court.status_code == 400
+    assert role.status_code == 400
+
+
+def test_admin_changer_role(client):
+    h = en_tete(client, "admin")
+
+    response = client.patch("/admin/utilisateurs/1/role", headers=h, json={"role": "SUPERVISOR"})
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "SUPERVISOR"
+    assert client.patch(
+        "/admin/utilisateurs/99/role", headers=h, json={"role": "USER"}
+    ).status_code == 404
+
+
+def test_admin_desactiver_empeche_la_connexion(client):
+    h = en_tete(client, "admin")
+
+    response = client.patch("/admin/utilisateurs/1/activation", headers=h, json={"est_active": False})
+
+    assert response.status_code == 200
+    assert response.json()["est_active"] is False
+    assert connecter(client, "alice").status_code == 401
+
+
+def test_admin_supprimer(client):
+    h = en_tete(client, "admin")
+
+    assert client.delete("/admin/utilisateurs/1", headers=h).status_code == 204
+    assert connecter(client, "alice").status_code == 401
+    assert client.delete("/admin/utilisateurs/1", headers=h).status_code == 404
+
+
+def test_admin_ne_peut_pas_se_supprimer_ni_se_desactiver(client):
+    h = en_tete(client, "admin")
+
+    assert client.delete("/admin/utilisateurs/3", headers=h).status_code == 409
+    assert client.patch(
+        "/admin/utilisateurs/3/activation", headers=h, json={"est_active": False}
+    ).status_code == 409
