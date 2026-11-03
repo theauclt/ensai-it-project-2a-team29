@@ -57,6 +57,16 @@ def _date_locale(texte: str, tz: tzinfo) -> datetime:
     return date.astimezone(tz).replace(tzinfo=None)
 
 
+def formater_date(texte: str | None, tz: tzinfo, defaut: str = "—") -> str:
+    """Date ISO renvoyée par l'API affichée en JJ/MM/AAAA HH:MM dans le fuseau d'affichage (defaut si absente)."""
+    if not texte:
+        return defaut
+    try:
+        return _date_locale(texte, tz).strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return defaut
+
+
 def lignes_tableau(
     traitements: list[dict], logins: dict[int, str], tz: tzinfo, hash_complet: bool = False
 ) -> list[dict]:

@@ -94,9 +94,41 @@ class ApiClient:
         """GET /admin/utilisateurs : liste des comptes (réservé aux ADMIN, sinon ApiError 403)."""
         return self._liste(self._requete("GET", "/admin/utilisateurs"))
 
+    def creer_utilisateur(self, login: str, mot_de_passe: str, role: str) -> dict:
+        """POST /admin/utilisateurs : crée un compte (ADMIN). Erreurs : 409 si le login existe, 400 si invalide."""
+        reponse = self._requete(
+            "POST", "/admin/utilisateurs", json={"login": login, "mot_de_passe": mot_de_passe, "role": role}
+        )
+        return self._objet(reponse)
+
+    def changer_role(self, user_id: int, role: str) -> dict:
+        """PATCH /admin/utilisateurs/{id}/role : change le rôle d'un compte (ADMIN)."""
+        reponse = self._requete("PATCH", f"/admin/utilisateurs/{user_id}/role", json={"role": role})
+        return self._objet(reponse)
+
+    def definir_activation(self, user_id: int, est_active: bool) -> dict:
+        """PATCH /admin/utilisateurs/{id}/activation : désactive ou réactive un compte (ADMIN)."""
+        reponse = self._requete("PATCH", f"/admin/utilisateurs/{user_id}/activation", json={"est_active": est_active})
+        return self._objet(reponse)
+
+    def supprimer_utilisateur(self, user_id: int) -> None:
+        """DELETE /admin/utilisateurs/{id} : supprime le compte ET ses traitements archivés (ADMIN)."""
+        self._requete("DELETE", f"/admin/utilisateurs/{user_id}")
+
     # ------------------------------------------------------------------
     # Outils internes
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _objet(reponse: httpx.Response) -> dict:
+        """Lit une réponse JSON qui doit être un objet, avec un message clair sinon."""
+        try:
+            donnees = reponse.json()
+        except ValueError as exc:
+            raise ApiError("Réponse inattendue de l'API.") from exc
+        if not isinstance(donnees, dict):
+            raise ApiError("Réponse inattendue de l'API.")
+        return donnees
 
     @staticmethod
     def _liste(reponse: httpx.Response) -> list[dict]:

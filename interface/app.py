@@ -17,6 +17,7 @@ st.set_page_config(page_title="Anonymia", page_icon="🔒", layout="wide")
 page_connexion = st.Page("vues/connexion.py", title="Connexion", icon="🔑")
 page_caviardage = st.Page("vues/caviardage.py", title="Caviardage", icon="✂️", default=True)
 page_historique = st.Page("vues/historique.py", title="Historique", icon="📜")
+page_administration = st.Page("vues/administration.py", title="Administration", icon="👥")
 
 utilisateur = session.courante()
 
@@ -28,7 +29,8 @@ else:
     # Pages réservées à certains rôles (l'API contrôle aussi les droits : ici, c'est de l'affichage)
     if utilisateur["role"] in session.ROLES_HISTORIQUE:
         pages.append(page_historique)
-    # La page Administration sera ajoutée ici à l'étape suivante, pour les ADMIN
+    if utilisateur["role"] in session.ROLES_ADMINISTRATION:
+        pages.append(page_administration)
 
     with st.sidebar:
         st.caption(f"Connecté : **{utilisateur['login']}** ({utilisateur['role']})")
