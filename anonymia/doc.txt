@@ -379,9 +379,9 @@ Pour qu'un bug soit reproductible, indiquez :
 Ne collez jamais de vrai document personnel, de mot de passe, de cle API ni le
 contenu de votre fichier .env dans un message ou une issue.
 
---------------
-interface
---------------
-Exécutez dans un 2ème Terminal :
+--------------------------------------------------------------------------------
+13.INTERFACE APPLICATION
+--------------------------------------------------------------------------------
+Exécutez dans un 2ème Terminal dans le dossier racine du projet :
    source .venv/bin/activate
    python -m streamlit run interface/app.py
