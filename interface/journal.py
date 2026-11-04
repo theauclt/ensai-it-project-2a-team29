@@ -27,6 +27,7 @@ COLONNES = [
     "Données détectées",
     "Types de données",
     "Injection suspectée",
+    "Juge LLM",
     "Empreinte du document",
 ]
 
@@ -65,6 +66,31 @@ def libelle_detecteurs(contributeurs: str) -> str:
         return "Aucun"
     libelles = [_DETECTEURS.get(n, n) for n in noms]
     return f"{libelles[0]} seul" if len(libelles) == 1 else " + ".join(libelles)
+
+
+# Types d'injection renvoyés par le juge LLM -> libellé affiché
+LIBELLES_INJECTION_JUGE = {
+    "ignore_instructions": "Contournement des consignes",
+    "role_manipulation": "Changement de rôle",
+    "prompt_extraction": "Extraction du prompt",
+    "data_exfiltration": "Exfiltration de données",
+    "other": "Autre tentative",
+}
+
+
+def libelle_juge(statut: str | None, type_injection: str | None = None) -> str:
+    """
+    Verdict du juge LLM en clair. « Rien repéré » ne veut pas dire « sûr » : le juge peut être trompé.
+
+    Pas de statut (traitement sans juge) : « — ».
+    """
+    if statut == "detected":
+        return "Injection : " + LIBELLES_INJECTION_JUGE.get(type_injection or "", type_injection or "type inconnu")
+    if statut == "not_detected":
+        return "Rien repéré"
+    if statut == "unavailable":
+        return "Indisponible"
+    return "—"
 
 
 def injection_suspectee(traitement: dict) -> bool:
@@ -131,6 +157,7 @@ def lignes_tableau(
                 "Données détectées": t["nb_pii_detectees"],
                 "Types de données": libelle_types(t.get("types_pii")),
                 "Injection suspectée": injection_suspectee(t),
+                "Juge LLM": libelle_juge(t.get("juge_statut"), t.get("juge_type")),
                 "Empreinte du document": empreinte if hash_complet else empreinte[:12] + "…",
             }
         )
@@ -176,6 +203,7 @@ def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo)
     par_strategie: dict[str, int] = {}
     par_detecteurs: dict[str, int] = {}
     par_tranche = {nom: 0 for nom, _ in _TRANCHES}
+    juge = {"detected": 0, "not_detected": 0, "unavailable": 0, "sans_juge": 0}
     par_type: dict[str, int] = {}
     sans_types = 0
     sans_llm = 0
@@ -183,6 +211,8 @@ def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo)
     for t in traitements:
         nom = logins.get(t["user_id"]) or f"n°{t['user_id']}"
         par_utilisateur[nom] = par_utilisateur.get(nom, 0) + 1
+
+        juge[t.get("juge_statut") if t.get("juge_statut") in juge else "sans_juge"] += 1
 
         types = regrouper_types(t.get("types_pii"))
         if types or t["nb_pii_detectees"] == 0:
@@ -232,6 +262,7 @@ def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo)
         "pii_moyenne": round(base["pii"] / total, 1) if total else 0.0,
         "pii_max": pii_max,
         "par_tranche": par_tranche,
+        "juge": juge,
         "par_type": trier(par_type),
         "traitements_sans_types": sans_types,
         "detail_utilisateurs": detail,

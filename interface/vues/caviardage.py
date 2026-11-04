@@ -38,6 +38,9 @@ LIBELLES_INJECTION = {
     "role_manipulation": "Changement de rôle",
     "prompt_extraction": "Extraction du prompt",
     "data_exfiltration": "Exfiltration de données",
+    # types du juge d'injection LLM (service/business_objects/injection_verdict.py)
+    "ignore_instructions": "Contournement des consignes",
+    "other": "Autre tentative de manipulation",
 }
 
 EXEMPLE = (
@@ -142,6 +145,21 @@ def _bandeaux(resultat: dict) -> None:
             "vous demandera une confirmation et le résultat devra être relu.",
             categories,
         )
+    juge = resultat.get("juge") if resultat["type"] == "caviardage" else None
+    if juge and juge["statut"] == "detected":
+        theme.alerte(
+            "Le juge LLM a repéré une tentative de manipulation",
+            "Le caviardage a eu lieu normalement, mais ce document semble chercher à détourner le "
+            "détecteur. Il est signalé dans l'historique : relisez attentivement le résultat avant de le diffuser.",
+            _categories([juge["type"]] if juge.get("type") else []),
+            grave=True,
+        )
+    elif juge and juge["statut"] == "unavailable":
+        theme.alerte(
+            "Juge d'injection indisponible",
+            "Le second contrôle contre les tentatives de manipulation n'a pas pu avoir lieu. Le caviardage "
+            "n'est pas affecté, mais l'absence d'alerte ne prouve pas que le document est sûr.",
+        )
     if resultat.get("mode_degrade"):
         theme.alerte(
             "Mode dégradé : le LLM n'a pas répondu",
@@ -192,6 +210,7 @@ def _resultat_caviardage(contenu: str, strategie: str, reponse: dict) -> dict:
         "strategie": strategie,
         "mode_degrade": reponse["mode_degrade"],
         "types_injection": reponse["types_injection"],
+        "juge": reponse.get("juge"),
     }
     if reponse["confirmation_requise"]:
         return {"type": "confirmation", **commun}

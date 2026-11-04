@@ -31,6 +31,8 @@ CREATE TABLE traitements (
     nb_pii_detectees INTEGER NOT NULL,
     injection_suspectee BOOLEAN NOT NULL DEFAULT FALSE,
     types_pii TEXT NOT NULL DEFAULT '',
+    juge_statut VARCHAR(20),
+    juge_type VARCHAR(50),
 
     CONSTRAINT fk_traitements_user
         FOREIGN KEY (user_id)

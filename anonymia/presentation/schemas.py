@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -52,6 +53,18 @@ class AnalyseResponse(BaseModel):
     types_injection: list[str] = []
 
 
+class VerdictJugeResponse(BaseModel):
+    """
+    Verdict du juge d'injection LLM : jamais son explication, qui pourrait recopier du contenu.
+
+    statut : detected (tentative de manipulation repérée), not_detected (rien repéré, ce qui ne
+    prouve pas que le document est sûr) ou unavailable (le juge n'a pas pu répondre).
+    """
+
+    statut: Literal["detected", "not_detected", "unavailable"]
+    type: str | None = Field(default=None, description="Type d'injection, seulement si statut = detected")
+
+
 class CaviardageResponse(BaseModel):
     """Réponse de POST /documents/caviarder."""
 
@@ -61,6 +74,8 @@ class CaviardageResponse(BaseModel):
     detecteurs: list[str] = []
     mode_degrade: bool = False
     types_injection: list[str] = []
+    # Verdict du juge LLM (FO3) ; None si aucun juge n'est actif ou si le document n'a pas été traité
+    juge: VerdictJugeResponse | None = None
 
 
 class StrategiesResponse(BaseModel):
@@ -81,6 +96,9 @@ class TraitementResponse(BaseModel):
     nb_pii_detectees: int
     types_pii: dict[str, int] = Field(default_factory=dict, description="Nombre de PII par type, ex. {'EMAIL': 2}")
     injection_suspectee: bool = False
+    # Verdict du juge d'injection LLM ; None = pas de juge pour ce traitement
+    juge_statut: str | None = None
+    juge_type: str | None = None
 
 
 class CreerUtilisateurRequest(BaseModel):
