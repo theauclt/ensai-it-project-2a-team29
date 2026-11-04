@@ -114,6 +114,18 @@ h1 { padding: 0 !important; }
 .an-titre h1 { font-size: 22px; font-weight: 600; margin: 0; color: var(--an-ink); line-height: 1.3; }
 .an-titre p { font-size: 14px; color: var(--an-muted); margin: 4px 0 0; max-width: 72ch; }
 
+/* ---------- Guide « Comment ça marche » (dans un popover) ---------- */
+[data-testid="stPopoverBody"]:has(.an-guide) { width: min(460px, calc(100vw - 32px)) !important; min-width: 0 !important; max-width: none !important; }
+.an-guide { font-size: 14px; line-height: 1.55; color: var(--an-ink); }
+.an-guide h3 { font-size: 14px; font-weight: 600; margin: 18px 0 6px; padding: 0; }
+.an-guide h3:first-child { margin-top: 0; }
+.an-guide ol { margin: 0; padding-left: 20px; }
+.an-guide li { margin: 0 0 6px; padding-left: 2px; }
+.an-guide dl { margin: 0; padding: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: baseline; }
+.an-guide dt { white-space: nowrap; margin: 0; padding: 0; }
+.an-guide dd { margin: 0; color: var(--an-muted); }
+.an-guide p { margin: 0; color: var(--an-muted); }
+
 /* ---------- Contrôles ---------- */
 .stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button {
   min-height: 36px; padding: 0 14px; border-radius: var(--an-radius-control); font-weight: 500;

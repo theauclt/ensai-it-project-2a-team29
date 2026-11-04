@@ -226,6 +226,7 @@ def _volet_resultat(resultat: dict | None, perime: bool) -> None:
         file_name="document_caviarde.txt",
         mime="text/plain",
         icon=":material/download:",
+        help="Fichier texte du document caviardé. Relisez-le avant de le diffuser.",
     )
 
 
@@ -254,11 +255,50 @@ def _detail(resultat: dict) -> None:
 # Page
 # ----------------------------------------------------------------------
 
-theme.entete(
-    "Caviardage",
-    "Le texte n'est pas conservé : seules des métadonnées sont archivées "
-    "(empreinte du document, stratégie, nombre de données détectées).",
-)
+def _guide() -> None:
+    """Contenu du bouton « Comment ça marche » : la marche à suivre et la lecture des résultats."""
+    st.html(
+        '<div class="an-guide">'
+        "<h3>Comment ça marche</h3>"
+        "<ol>"
+        "<li><b>Déposez le texte</b> dans le volet de gauche : collez-le, importez un fichier "
+        ".txt ou .md, ou essayez avec l'exemple.</li>"
+        "<li><b>Analysez</b> pour voir les données personnelles repérées, surlignées dans le texte, "
+        "sans rien modifier.</li>"
+        "<li><b>Choisissez une stratégie</b>, puis <b>caviardez</b> pour obtenir la version à diffuser.</li>"
+        "<li><b>Relisez</b> le document caviardé, puis téléchargez-le ou copiez-le.</li>"
+        "</ol>"
+        "<h3>Lire le résultat</h3>"
+        '<dl>'
+        '<dt><span class="an-pii">Claire Martin<sup>Nom</sup></span></dt>'
+        "<dd>Donnée repérée par l'analyse, avec son type.</dd>"
+        '<dt><span class="an-masque">[EMAIL_1]</span></dt>'
+        "<dd>Donnée masquée par un marqueur numéroté : une même valeur garde le même marqueur.</dd>"
+        '<dt><span class="an-pseudo">Julie Bernard</span></dt>'
+        "<dd>Donnée remplacée par une valeur fictive (pseudonymisation).</dd>"
+        "</dl>"
+        "<h3>Règles et LLM</h3>"
+        "<p>Des règles repèrent les formats précis (e-mails, téléphones, IBAN, n° de sécurité sociale, "
+        "plaques). Le LLM repère ce qui dépend du contexte : noms, lieux, adresses, organisations, dates. "
+        "La colonne Confiance du détail indique sa certitude pour chaque donnée.</p>"
+        "</div>"
+    )
+
+
+col_titre, col_aide = st.columns([4, 1.3], vertical_alignment="top", gap="small")
+with col_titre:
+    theme.entete(
+        "Caviardage",
+        "Anonymia s'appuie sur un LLM pour repérer les données personnelles : il en détecte la grande "
+        "majorité, et une relecture avant diffusion apporte la touche finale. Le texte n'est pas "
+        "conservé : seules des métadonnées sont archivées (empreinte du document, stratégie, "
+        "nombre de données détectées).",
+    )
+with (
+    col_aide.container(horizontal_alignment="right"),
+    st.popover("Comment ça marche", icon=":material/help:", type="tertiary"),
+):
+    _guide()
 
 # Les stratégies sont demandées à l'API une seule fois par session
 if "strategies" not in st.session_state:
@@ -284,10 +324,34 @@ with col_strategie:
         help="Utilisée au moment du caviardage. "
         + " ".join(AIDES_STRATEGIES.get(s, "") for s in st.session_state["strategies"]),
     ) or st.session_state["strategies"][0]
-col_exemple.button("Exemple", on_click=_inserer_exemple, type="tertiary", width="stretch")
-col_effacer.button("Effacer", on_click=_effacer, type="tertiary", width="stretch")
-analyser_clique = col_analyser.button("Analyser", width="stretch", icon=":material/search:")
-caviarder_clique = col_caviarder.button("Caviarder", type="primary", width="stretch", icon=":material/ink_eraser:")
+col_exemple.button(
+    "Exemple",
+    on_click=_inserer_exemple,
+    type="tertiary",
+    width="stretch",
+    help="Remplit le volet de gauche avec un court texte fictif pour essayer l'application.",
+)
+col_effacer.button(
+    "Effacer",
+    on_click=_effacer,
+    type="tertiary",
+    width="stretch",
+    help="Vide le texte, le fichier importé et le résultat.",
+)
+analyser_clique = col_analyser.button(
+    "Analyser",
+    width="stretch",
+    icon=":material/search:",
+    help="Repère les données personnelles et les surligne dans le texte, sans le modifier. "
+    "Rien n'est archivé.",
+)
+caviarder_clique = col_caviarder.button(
+    "Caviarder",
+    type="primary",
+    width="stretch",
+    icon=":material/ink_eraser:",
+    help="Remplace chaque donnée personnelle selon la stratégie choisie et produit le texte à diffuser.",
+)
 st.space("small")
 
 contenu = st.session_state["contenu"]
@@ -333,6 +397,7 @@ with col_source:
         key=f"fichier_{st.session_state['upload_n']}",
         on_change=_importer_fichier,
         label_visibility="collapsed",
+        help="Le contenu du fichier remplace le texte du volet. Encodage UTF-8, 100 000 caractères au plus.",
     )
     if "erreur_import" in st.session_state:
         st.error(st.session_state["erreur_import"])
