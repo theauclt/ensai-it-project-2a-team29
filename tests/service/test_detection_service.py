@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 
 import pytest
@@ -6,8 +7,10 @@ from anonymia.infrastructure.anonymization_strategy_factory import (
     AnonymizationStrategyFactory,
 )
 from anonymia.infrastructure.regex_detector import RegexDetector
+from anonymia.service.business_objects.injection_verdict import InjectionVerdict
 from anonymia.service.business_objects.pii_span import PIISpan
 from anonymia.service.detection_service import DetectionService
+from anonymia.service.interfaces.injection_judge import InjectionJudge
 from anonymia.service.interfaces.pii_detector import PIIDetector
 from anonymia.service.prompt_injector_detector import PromptInjectionDetector
 from tests.fakes import FakeArchiveRepository
@@ -50,10 +53,10 @@ def archive():
     return FakeArchiveRepository()
 
 
-def make_service(archive, detectors=None):
+def make_service(archive, detectors=None, judge=None):
     detectors = [RegexDetector()] if detectors is None else detectors
     return DetectionService(
-        detectors, AnonymizationStrategyFactory(), archive, PromptInjectionDetector()
+        detectors, AnonymizationStrategyFactory(), archive, PromptInjectionDetector(), judge
     )
 
 
@@ -262,4 +265,208 @@ async def test_document_sans_pii_a_des_types_vides(archive):
     await service.detect("Ceci est un document neutre.", "masking", user_id=1)
 
     assert archive.entries[0].types_pii == ""
+
+
+# ---------------------------------------------------------------------------
+# Juge d'injection LLM (FO3) : parallèle, facultatif, jamais bloquant
+# ---------------------------------------------------------------------------
+
+DETECTEE = InjectionVerdict(status="detected", injection_type="role_manipulation", explication="x")
+
+
+class FakeJudge(InjectionJudge):
+    def __init__(self, verdict=DETECTEE):
+        self.verdict = verdict
+        self.calls = 0
+        self.closed = False
+
+    async def analyze(self, content):
+        self.calls += 1
+        return self.verdict
+
+    async def aclose(self):
+        self.closed = True
+
+
+class FailingJudge(InjectionJudge):
+    async def analyze(self, content):
+        raise RuntimeError("juge en panne")
+
+
+async def test_sans_juge_le_verdict_est_absent(archive):
+    resultat = await make_service(archive).detect(CONTENT, "masking", user_id=1)
+
+    assert resultat.verdict_juge is None
+
+
+async def test_le_verdict_du_juge_est_renvoye_sans_changer_le_resultat(archive):
+    sans_juge = await make_service(FakeArchiveRepository()).detect(CONTENT, "masking", user_id=1)
+    juge = FakeJudge()
+
+    resultat = await make_service(archive, judge=juge).detect(CONTENT, "masking", user_id=1)
+
+    assert resultat.verdict_juge == DETECTEE
+    assert resultat.document == sans_juge.document  # le juge informe, il ne modifie rien
+    assert len(archive.entries) == 1
+    assert juge.calls == 1
+
+
+async def test_un_verdict_d_injection_ne_bloque_pas_le_traitement(archive):
+    resultat = await make_service(archive, judge=FakeJudge()).detect(CONTENT, "masking", user_id=1)
+
+    assert resultat.confirmation_requise is False
+    assert "[EMAIL_1]" in resultat.document
+
+
+async def test_une_erreur_du_juge_ne_bloque_ni_le_caviardage_ni_l_archivage(archive):
+    resultat = await make_service(archive, judge=FailingJudge()).detect(CONTENT, "masking", user_id=1)
+
+    assert resultat.verdict_juge == InjectionVerdict(status="unavailable")
+    assert "[EMAIL_1]" in resultat.document
+    assert len(archive.entries) == 1
+
+
+async def test_un_juge_indisponible_est_distingue_d_une_absence_d_injection(archive):
+    indisponible = InjectionVerdict(status="unavailable")
+
+    resultat = await make_service(archive, judge=FakeJudge(indisponible)).detect(CONTENT, "masking", user_id=1)
+
+    assert resultat.verdict_juge.status == "unavailable"
+    assert resultat.verdict_juge.status != "not_detected"
+
+
+async def test_la_panne_du_juge_n_empeche_pas_le_mode_degrade_des_detecteurs(archive):
+    service = make_service(archive, [RegexDetector(), FailingDetector()], judge=FailingJudge())
+
+    resultat = await service.detect(CONTENT, "masking", user_id=1)
+
+    assert resultat.detecteurs == ["RegexDetector"]
+    assert "[EMAIL_1]" in resultat.document
+
+
+async def test_le_juge_et_les_detecteurs_tournent_en_parallele(archive):
+    demarre = asyncio.Event()
+
+    class DetecteurQuiAttendLeJuge(PIIDetector):
+        async def detect(self, content):
+            await demarre.wait()  # ne finit que si le juge a déjà démarré
+            return []
+
+    class JugeQuiDemarre(InjectionJudge):
+        async def analyze(self, content):
+            demarre.set()
+            return DETECTEE
+
+    service = make_service(archive, [DetecteurQuiAttendLeJuge()], judge=JugeQuiDemarre())
+
+    # En séquence, le détecteur attendrait le juge pour toujours : le délai échouerait
+    resultat = await asyncio.wait_for(service.detect(CONTENT, "masking", user_id=1), timeout=2)
+
+    assert resultat.verdict_juge == DETECTEE
+
+
+async def test_le_juge_n_est_pas_appele_quand_le_filtre_demande_une_confirmation(archive):
+    juge = FakeJudge()
+
+    resultat = await make_service(archive, judge=juge).detect(SUSPECT, "masking", user_id=1)
+
+    assert resultat.confirmation_requise is True
+    assert resultat.verdict_juge is None
+    assert juge.calls == 0
+
+
+async def test_le_juge_est_appele_apres_confirmation(archive):
+    juge = FakeJudge()
+
+    resultat = await make_service(archive, judge=juge).detect(SUSPECT, "masking", user_id=1, confirmed=True)
+
+    assert juge.calls == 1
+    assert resultat.verdict_juge == DETECTEE
+
+
+async def test_analyze_n_appelle_pas_le_juge(archive):
+    juge = FakeJudge()
+
+    await make_service(archive, judge=juge).analyze(CONTENT)
+
+    assert juge.calls == 0
+
+
+async def test_aclose_ferme_aussi_le_juge(archive):
+    juge = FakeJudge()
+
+    await make_service(archive, judge=juge).aclose()
+
+    assert juge.closed is True
+
+
+# ---------------------------------------------------------------------------
+# Journalisation du verdict du juge (FO3, étape 5)
+# ---------------------------------------------------------------------------
+
+
+async def test_le_verdict_du_juge_est_archive(archive):
+    await make_service(archive, judge=FakeJudge()).detect(CONTENT, "masking", user_id=1)
+
+    (entree,) = archive.entries
+    assert entree.juge_statut == "detected"
+    assert entree.juge_type == "role_manipulation"
+
+
+async def test_sans_juge_rien_n_est_archive_pour_le_juge(archive):
+    await make_service(archive).detect(CONTENT, "masking", user_id=1)
+
+    assert archive.entries[0].juge_statut is None
+    assert archive.entries[0].juge_type is None
+
+
+async def test_non_detectee_n_a_pas_de_type(archive):
+    verdict = InjectionVerdict(status="not_detected", explication="rien")
+
+    await make_service(archive, judge=FakeJudge(verdict)).detect(CONTENT, "masking", user_id=1)
+
+    assert archive.entries[0].juge_statut == "not_detected"
+    assert archive.entries[0].juge_type is None
+
+
+async def test_le_traitement_reste_archive_quand_le_juge_echoue(archive):
+    await make_service(archive, judge=FailingJudge()).detect(CONTENT, "masking", user_id=1)
+
+    (entree,) = archive.entries
+    assert entree.juge_statut == "unavailable"
+    assert entree.juge_type is None
+    assert entree.nb_pii_detectees == 1
+
+
+async def test_l_explication_du_juge_n_est_jamais_archivee(archive):
+    verdict = InjectionVerdict(
+        status="detected", injection_type="other", explication="Le document cite jean@mail.fr et Martin"
+    )
+
+    await make_service(archive, judge=FakeJudge(verdict)).detect(CONTENT, "masking", user_id=1)
+
+    (entree,) = archive.entries
+    assert "jean@mail.fr" not in str(vars(entree))
+    assert "Martin" not in str(vars(entree))
+    assert not hasattr(entree, "explication")
+
+
+async def test_seules_des_valeurs_connues_sont_archivees(archive):
+    # un verdict inattendu (texte libre) ne doit pas entrer dans l'historique
+    verdict = InjectionVerdict(status="detected", injection_type="texte du document jean@mail.fr")
+
+    await make_service(archive, judge=FakeJudge(verdict)).detect(CONTENT, "masking", user_id=1)
+    await make_service(archive, judge=FakeJudge(InjectionVerdict(status="peut-etre"))).detect(
+        CONTENT, "masking", user_id=1
+    )
+
+    assert (archive.entries[0].juge_statut, archive.entries[0].juge_type) == ("detected", "other")
+    assert (archive.entries[1].juge_statut, archive.entries[1].juge_type) == ("unavailable", None)
+
+
+async def test_un_echec_d_archivage_n_est_pas_masque_meme_avec_un_juge():
+    service = make_service(BrokenArchive(), judge=FakeJudge())
+
+    with pytest.raises(ConnectionError):
+        await service.detect(CONTENT, "masking", user_id=1)
 

@@ -78,7 +78,10 @@ class ApiClient:
           caviarde             : le texte caviardé, ou None si l'API demande une confirmation ;
           confirmation_requise : True si le texte ressemble à une injection de prompt et n'a
                                  pas été traité (le renvoyer avec confirmer=True pour le traiter) ;
-          mode_degrade, types_injection, avertissements : comme pour analyser.
+          mode_degrade, types_injection, avertissements : comme pour analyser ;
+          juge                 : verdict du juge d'injection LLM, {"statut": "detected" |
+                                 "not_detected" | "unavailable", "type": ...}, ou None s'il n'y a
+                                 pas de juge. "not_detected" ne prouve pas que le texte est sûr.
         """
         donnees = self._objet(
             self._requete(
@@ -97,6 +100,7 @@ class ApiClient:
             "mode_degrade": bool(donnees.get("mode_degrade", False)),
             "types_injection": list(donnees.get("types_injection") or []),
             "avertissements": list(donnees.get("avertissements") or []),
+            "juge": self._verdict_juge(donnees.get("juge")),
         }
 
     def journaux(
@@ -149,6 +153,13 @@ class ApiClient:
     # ------------------------------------------------------------------
     # Outils internes
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _verdict_juge(brut) -> dict | None:
+        """Verdict du juge tel que l'API le renvoie, ou None s'il est absent ou illisible."""
+        if not isinstance(brut, dict) or brut.get("statut") not in ("detected", "not_detected", "unavailable"):
+            return None
+        return {"statut": brut["statut"], "type": brut.get("type")}
 
     @staticmethod
     def _objet(reponse: httpx.Response) -> dict:

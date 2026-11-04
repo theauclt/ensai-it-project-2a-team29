@@ -45,6 +45,8 @@ async def lister_traitements(
             detecteurs_contributeurs=e.detecteurs_contributeurs,
             nb_pii_detectees=e.nb_pii_detectees,
             types_pii=depuis_texte(e.types_pii),
+            juge_statut=e.juge_statut,
+            juge_type=e.juge_type,
             injection_suspectee=e.injection_suspectee,
         )
         for e in entries

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from ..service.business_objects.injection_verdict import metadonnees_juge
 from ..service.business_objects.user import User
 from ..service.detection_service import DetectionService
 from .providers import get_detection_service
@@ -10,6 +11,7 @@ from .schemas import (
     DocumentRequest,
     PIIResponse,
     StrategiesResponse,
+    VerdictJugeResponse,
 )
 from .security import get_current_user
 
@@ -73,12 +75,18 @@ async def caviarder(
     avertissements = []
     if resultat.types_injection:
         avertissements.append("Injection de prompt suspectée : relisez attentivement le résultat.")
+    statut_juge, type_juge = metadonnees_juge(resultat.verdict_juge)
+    if statut_juge == "detected":
+        avertissements.append(
+            "Le juge LLM a repéré une tentative de manipulation du système : relisez attentivement le résultat."
+        )
     return CaviardageResponse(
         document_caviarde=resultat.document,
         avertissements=avertissements,
         detecteurs=resultat.detecteurs,
         mode_degrade=DETECTEUR_LLM not in resultat.detecteurs,
         types_injection=resultat.types_injection,
+        juge=VerdictJugeResponse(statut=statut_juge, type=type_juge) if statut_juge else None,
     )
 
 

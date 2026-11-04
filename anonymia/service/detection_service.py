@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 
 from .business_objects.anonymization_result import AnonymizationResult
 from .business_objects.audit_entry import AuditEntry
+from .business_objects.injection_verdict import InjectionVerdict, metadonnees_juge
 from .business_objects.pii_span import PIISpan
 from .interfaces.archive_repository import ArchiveRepository
+from .interfaces.injection_judge import InjectionJudge
 from .interfaces.pii_detector import PIIDetector
 from .prompt_injector_detector import PromptInjectionDetector
 from .types_pii import compter, vers_texte
@@ -35,20 +37,23 @@ class DetectionService:
         strategy_factory: "AnonymizationStrategyFactory",
         archive_repo: ArchiveRepository,
         injection_detector: PromptInjectionDetector,
+        injection_judge: InjectionJudge | None = None,
     ):
         self._detectors = detectors
         self._strategy_factory = strategy_factory
         self._archive_repo = archive_repo
         self._injection_detector = injection_detector
+        # Juge LLM facultatif (FO3) : sans juge, le service fonctionne comme avant
+        self._injection_judge = injection_judge
     
     def available_strategies(self) -> list[str]:
         """Noms des stratégies d'anonymisation disponibles (endpoint /documents/strategies)."""
         return self._strategy_factory.available_strategies()
 
     async def aclose(self) -> None:
-        """Ferme les ressources des détecteurs qui en ont (client HTTP du LLM)."""
-        for detector in self._detectors:
-            close = getattr(detector, "aclose", None)
+        """Ferme les ressources des détecteurs et du juge qui en ont (client HTTP du LLM)."""
+        for collaborateur in (*self._detectors, self._injection_judge):
+            close = getattr(collaborateur, "aclose", None)
             if close is not None:
                 await close()
 
@@ -84,9 +89,15 @@ class DetectionService:
                 confirmation_requise=True,
             )
 
-        spans, detectors_ok = await self._run_detectors(content)
+        # Le juge tourne en même temps que les détecteurs : on n'attend que le plus lent.
+        # Ni _run_detectors ni _run_judge ne lèvent d'exception : une panne de l'un ne peut
+        # donc ni bloquer la détection ni empêcher l'anonymisation.
+        (spans, detectors_ok), verdict_juge = await asyncio.gather(
+            self._run_detectors(content), self._run_judge(content)
+        )
         spans = self._merge_spans(spans)
         anonymized = strategy.apply(content, spans)
+        juge_statut, juge_type = metadonnees_juge(verdict_juge)
 
         await self._archive_repo.save(
             AuditEntry(
@@ -98,9 +109,31 @@ class DetectionService:
                 nb_pii_detectees=len(spans),
                 injection_suspectee=bool(injection_types),
                 types_pii=vers_texte(compter(spans)),
+                juge_statut=juge_statut,
+                juge_type=juge_type,
             )
         )
-        return AnonymizationResult(document=anonymized, types_injection=injection_types, detecteurs=detectors_ok)
+        return AnonymizationResult(
+            document=anonymized,
+            types_injection=injection_types,
+            detecteurs=detectors_ok,
+            verdict_juge=verdict_juge,
+        )
+
+    async def _run_judge(self, content: str) -> InjectionVerdict | None:
+        """
+        Demande son verdict au juge d'injection (None s'il n'y a pas de juge).
+
+        Toute erreur du juge devient un verdict « unavailable » : le traitement continue.
+        On ne logge que le type d'erreur, jamais le contenu du document.
+        """
+        if self._injection_judge is None:
+            return None
+        try:
+            return await self._injection_judge.analyze(content)
+        except Exception as exc:  # noqa: BLE001 - le juge ne doit jamais bloquer le pipeline
+            logger.warning("Juge d'injection indisponible : %s", type(exc).__name__)
+            return InjectionVerdict(status="unavailable")
 
     async def _run_detectors(self, content: str) -> tuple[list[PIISpan], list[str]]:
         """
