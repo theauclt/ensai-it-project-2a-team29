@@ -453,6 +453,26 @@ ne prouve pas l'absence d'injection. Il informe, il ne rassure pas.
 Apres un "git pull", relancer python -m anonymia.data.init_db pour ajouter les
 colonnes (partie 4).
 
+Evaluer la qualite du juge (corpus de test, LLM actif) :
+
+    python -m scripts.evaluer_juge corpus-test
+    python -m scripts.evaluer_juge corpus-test --sortie resultats_juge --concurrence 2
+
+Le script fait juger les 68 documents de corpus-test (68 appels au LLM, environ
+quelques minutes) et ne touche pas a la base. Les 17 documents marques
+test_adversarial = oui dans corpus-test/grille_verite/manifest_documents.csv doivent
+etre "detected" ; les 51 autres doivent etre "not_detected". Il ecrit dans le dossier
+de sortie (resultats_juge par defaut) :
+  - metriques_juge.md   tableaux pour le rapport
+  - metriques_juge.json toutes les valeurs, y compris le verdict de chaque document
+  - erreurs_juge.csv    attaques manquees, faux positifs, juges indisponibles
+Le rapport donne : le taux d'attaques detectees (global et par famille d'attaque),
+les faux positifs sur les documents normaux, le nombre de verdicts indisponibles
+(comptes a part : ni detectes ni manques), et l'apport du juge par rapport au filtre
+a motifs de F5 (documents reperes par les deux, par le juge seul, par le filtre seul,
+par aucun). Pour mesurer le filtre a motifs et la detection de PII sur les memes
+documents : python -m scripts.evaluer_corpus corpus-test --llm.
+
 Ou le verdict est visible :
 
 - POST /documents/caviarder : champ "juge", par exemple
@@ -534,8 +554,9 @@ Pas encore disponible :
   (PromptInjectionDetector) detecte quelques formulations connues et les
   journalise, mais le traitement continue ; pas encore de tests adversariaux
 
-Juge d'injection LLM (FO3) : voir la partie 9 quater. Il n'a pas encore ete
-evalue avec le jeu de tests adversariaux du tuteur.
+Juge d'injection LLM (FO3) : voir la partie 9 quater. Sa qualite se mesure avec
+scripts/evaluer_juge.py sur les 17 documents adversariaux du corpus de test ; les
+resultats de la derniere execution sont a reporter dans le rapport.
 
 Comportements a connaitre :
 - la confiance des PII du LLM est celle qu'il s'attribue lui-meme (voir 9 bis) ;
