@@ -13,7 +13,7 @@ from api_client import ApiClient, ApiError
 
 utilisateur = session.exiger_connexion()
 
-st.title("📊 Tableau de bord")
+st.title("Tableau de bord")
 
 # Garde-fou d'affichage : la page n'est normalement pas proposée aux autres rôles,
 # et l'API refuserait de toute façon la requête (erreur 403).

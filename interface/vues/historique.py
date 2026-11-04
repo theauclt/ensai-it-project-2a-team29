@@ -14,7 +14,7 @@ from api_client import ApiClient, ApiError
 
 utilisateur = session.exiger_connexion()
 
-st.title("📜 Historique")
+st.title("Historique")
 
 # Garde-fou d'affichage : la page n'est normalement pas proposée aux autres rôles,
 # et l'API refuserait de toute façon la requête (erreur 403).

@@ -12,3 +12,37 @@ gatherUsageStats = false
 [client]
 # Masque le menu "Deploy" de Streamlit, inutile pour cette application
 toolbarMode = "minimal"
+
+# ----------------------------------------------------------------------
+# Thème : un cadre gris pierre (barre latérale et bandeau) autour d'une feuille blanche
+# où se fait le travail. Une seule couleur d'accent (bleu canard), réservée aux données
+# détectées ; l'action principale est à l'encre, comme un trait de caviardage.
+# Le reste de la mise en forme est dans interface/theme.py.
+# ----------------------------------------------------------------------
+[theme]
+base = "light"
+primaryColor = "#131416"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f5f6"
+textColor = "#131416"
+linkColor = "#1b6c80"
+linkUnderline = false
+borderColor = "#e3e4e6"
+showWidgetBorder = true
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+baseFontSize = 14
+headingFontSizes = ["22px", "16px", "14px", "14px", "14px", "14px"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+baseRadius = "6px"
+codeBackgroundColor = "#f4f5f6"
+blueColor = "#1b6c80"
+greenColor = "#1e7b4f"
+redColor = "#c4242a"
+orangeColor = "#92400e"
+
+[theme.sidebar]
+backgroundColor = "#f4f4f1"
+secondaryBackgroundColor = "#ebebe7"
+borderColor = "#e3e3df"
