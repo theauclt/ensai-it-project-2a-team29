@@ -2,8 +2,9 @@
 Page Historique : liste des traitements archivés, avec filtres, totaux et export CSV.
 
 Réservée aux superviseurs et aux administrateurs. L'historique ne contient que des
-métadonnées (date, utilisateur, stratégie, nombre de données détectées, empreinte du
-document) : jamais le texte des documents ni les données personnelles elles-mêmes.
+métadonnées (date, utilisateur, stratégie, nombre de données détectées, injection de prompt
+suspectée, empreinte du document) : jamais le texte des documents ni les données personnelles
+elles-mêmes.
 """
 from datetime import date
 
@@ -91,7 +92,7 @@ with st.form("filtres_historique"):
     login_filtre = col_login.text_input("Utilisateur (login)", placeholder="Tous les utilisateurs")
     debut_filtre = col_debut.date_input("Du", value=None, format="DD/MM/YYYY")
     fin_filtre = col_fin.date_input("Au", value=None, format="DD/MM/YYYY")
-    recherche = st.form_submit_button("🔍 Rechercher", type="primary")
+    recherche = st.form_submit_button("Rechercher", type="primary", icon=":material/search:")
 
 if recherche:
     _charger(login_filtre, debut_filtre, fin_filtre)
@@ -115,10 +116,16 @@ if resultat is not None:
         st.info(message)
     else:
         stats = journal.statistiques(traitements, tz)
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("Traitements", stats["traitements"])
         col2.metric("Données détectées", stats["pii"])
         col3.metric("Utilisateurs", stats["utilisateurs"])
+        col4.metric(
+            "Injections suspectées",
+            stats["injections"],
+            help="Traitements confirmés par l'utilisateur alors que le document contenait "
+            "des motifs d'injection de prompt. Le résultat de ces traitements doit être relu.",
+        )
 
         if len(stats["par_jour"]) > 1:
             st.bar_chart(
@@ -128,20 +135,38 @@ if resultat is not None:
                 height=220,
             )
 
+        # Filtre local (sans nouvel appel à l'API) sur les seuls traitements suspects
+        seulement_suspects = st.toggle(
+            f"Seulement les injections suspectées ({stats['injections']})",
+            disabled=stats["injections"] == 0,
+        )
+        affiches = [t for t in traitements if journal.injection_suspectee(t)] if seulement_suspects else traitements
+
+        # « Oui » / « Non » en toutes lettres : une case cochée grisée se repère mal dans la liste
+        lignes = journal.lignes_tableau(affiches, resultat["logins"], tz)
+        for ligne in lignes:
+            ligne["Injection suspectée"] = "Oui" if ligne["Injection suspectée"] else "Non"
+
         st.dataframe(
-            journal.lignes_tableau(traitements, resultat["logins"], tz),
+            lignes,
             hide_index=True,
             column_config={
                 "Date": st.column_config.DatetimeColumn("Date", format="DD/MM/YYYY HH:mm:ss"),
                 "Données détectées": st.column_config.NumberColumn("Données détectées", format="%d"),
+                "Injection suspectée": st.column_config.TextColumn(
+                    "Injection suspectée",
+                    help="Le document contenait des motifs d'injection de prompt ; "
+                    "l'utilisateur a confirmé le traitement malgré l'alerte.",
+                ),
             },
         )
 
         # Le CSV contient les empreintes complètes (le tableau les raccourcit)
         st.download_button(
-            "⬇️ Exporter en CSV",
+            "Exporter en CSV",
+            icon=":material/download:",
             data=journal.vers_csv(
-                journal.lignes_tableau(traitements, resultat["logins"], tz, hash_complet=True)
+                journal.lignes_tableau(affiches, resultat["logins"], tz, hash_complet=True)
             ),
             file_name=f"historique_{date.today().isoformat()}.csv",
             mime="text/csv",

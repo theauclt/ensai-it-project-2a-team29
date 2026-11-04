@@ -4,7 +4,11 @@ Mise en forme de l'historique des traitements pour l'affichage et l'export CSV.
 Ce module n'importe pas Streamlit : il se teste seul, avec de simples listes de dictionnaires.
 Il reçoit les traitements tels que les renvoie l'API (GET /journaux) :
 id, user_id, date_traitement, hash_document, strategie_anonymisation,
-detecteurs_contributeurs, nb_pii_detectees.
+detecteurs_contributeurs, nb_pii_detectees, injection_suspectee.
+
+injection_suspectee vaut True quand le document contenait des motifs d'injection de prompt et
+que l'utilisateur a confirmé le traitement malgré l'alerte. Les traitements archivés avant
+l'ajout de cette colonne n'ont pas le champ : on les considère comme non suspects.
 """
 import csv
 import io
@@ -13,7 +17,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 FUSEAU_PAR_DEFAUT = "Europe/Paris"
 
-COLONNES = ["Date", "Utilisateur", "Stratégie", "Détecteurs", "Données détectées", "Empreinte du document"]
+COLONNES = [
+    "Date",
+    "Utilisateur",
+    "Stratégie",
+    "Détecteurs",
+    "Données détectées",
+    "Injection suspectée",
+    "Empreinte du document",
+]
 
 _STRATEGIES = {"masking": "Masquage", "pseudonymization": "Pseudonymisation"}
 _DETECTEURS = {"RegexDetector": "Regex", "LLMDetector": "LLM"}
@@ -50,6 +62,11 @@ def libelle_detecteurs(contributeurs: str) -> str:
         return "Aucun"
     libelles = [_DETECTEURS.get(n, n) for n in noms]
     return f"{libelles[0]} seul" if len(libelles) == 1 else " + ".join(libelles)
+
+
+def injection_suspectee(traitement: dict) -> bool:
+    """Vrai si le traitement a été fait malgré des motifs d'injection de prompt (absent = faux)."""
+    return bool(traitement.get("injection_suspectee", False))
 
 
 def _date_locale(texte: str, tz: tzinfo) -> datetime:
@@ -89,6 +106,7 @@ def lignes_tableau(
                 "Stratégie": _STRATEGIES.get(t["strategie_anonymisation"], t["strategie_anonymisation"]),
                 "Détecteurs": libelle_detecteurs(t["detecteurs_contributeurs"]),
                 "Données détectées": t["nb_pii_detectees"],
+                "Injection suspectée": injection_suspectee(t),
                 "Empreinte du document": empreinte if hash_complet else empreinte[:12] + "…",
             }
         )
@@ -105,6 +123,7 @@ def statistiques(traitements: list[dict], tz: tzinfo) -> dict:
         "traitements": len(traitements),
         "pii": sum(t["nb_pii_detectees"] for t in traitements),
         "utilisateurs": len({t["user_id"] for t in traitements}),
+        "injections": sum(injection_suspectee(t) for t in traitements),
         "par_jour": dict(sorted(par_jour.items())),
     }
 
@@ -196,6 +215,8 @@ def _proteger(valeur):
 
     On préfixe alors d'une apostrophe. Les nombres et les dates ne sont pas concernés.
     """
+    if isinstance(valeur, bool):
+        return "Oui" if valeur else "Non"
     if isinstance(valeur, str) and valeur[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + valeur
     return valeur
