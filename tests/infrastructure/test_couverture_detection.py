@@ -15,6 +15,7 @@ from anonymia.infrastructure.anonymization_strategy_factory import (
     AnonymizationStrategyFactory,
 )
 from anonymia.infrastructure.llm_detector import (
+    DEFAULT_CONFIDENCE,
     LLMDetector,
     LLMInvalidResponseError,
 )
@@ -105,6 +106,56 @@ async def test_entite_en_double_n_est_gardee_qu_une_fois():
     assert [(s.text, s.start, s.end) for s in spans] == [("Martin", 3, 9)]
 
 
+# --- confiance (facultative, nombre entre 0 et 1) ---------------------------
+
+
+@pytest.mark.parametrize(
+    "confiance",
+    [True, "0.9", None, 1.5, -0.1],  # booléen, texte, vide, hors de [0, 1]
+)
+async def test_confiance_invalide_declenche_une_erreur(confiance):
+    detector = make_detector(
+        brut([{"texte": "Martin", "type": "NOM", "confiance": confiance}])
+    )
+
+    with pytest.raises(LLMInvalidResponseError, match="confiance"):
+        await detector.detect("M. Martin")
+
+
+async def test_la_confiance_fournie_est_reportee_sur_le_span():
+    detector = make_detector(
+        brut([{"texte": "Martin", "type": "NOM", "confiance": 0.8}])
+    )
+
+    (span,) = await detector.detect("M. Martin")
+
+    assert span.confidence == 0.8
+    assert (span.start, span.end) == (3, 9)
+
+
+async def test_confiance_absente_recoit_la_valeur_par_defaut():
+    detector = make_detector(brut([{"texte": "Martin", "type": "NOM"}]))
+
+    (span,) = await detector.detect("M. Martin")
+
+    assert span.confidence == DEFAULT_CONFIDENCE
+
+
+async def test_confiance_entiere_acceptee_aux_bornes():
+    detector = make_detector(
+        brut(
+            [
+                {"texte": "Martin", "type": "NOM", "confiance": 1},
+                {"texte": "Rennes", "type": "LIEU", "confiance": 0},
+            ]
+        )
+    )
+
+    spans = await detector.detect("M. Martin, Rennes")
+
+    assert [s.confidence for s in spans] == [1.0, 0.0]
+
+
 async def test_cles_en_trop_dans_la_reponse_sont_refusees():
     detector = make_detector(json.dumps({"entites": [], "override": True}))
 
@@ -150,24 +201,26 @@ def test_positions_hors_du_document_refusees(monkeypatch):
     _imposer_positions(monkeypatch, 5, 999)
 
     with pytest.raises(LLMInvalidResponseError, match="Positions"):
-        LLMDetector._locate_spans([("Martin", "NOM")], "M. Martin")
+        LLMDetector._locate_spans([("Martin", "NOM", 0.9)], "M. Martin")
 
 
 def test_positions_qui_ne_correspondent_pas_au_texte_refusees(monkeypatch):
     _imposer_positions(monkeypatch, 0, 6)  # "M. Mar" au lieu de "Martin"
 
     with pytest.raises(LLMInvalidResponseError, match="Incohérence"):
-        LLMDetector._locate_spans([("Martin", "NOM")], "M. Martin")
+        LLMDetector._locate_spans([("Martin", "NOM", 0.9)], "M. Martin")
 
 
 def test_texte_introuvable_refuse():
     with pytest.raises(LLMInvalidResponseError, match="localiser"):
-        LLMDetector._locate_spans([("Dupont", "NOM")], "M. Martin")
+        LLMDetector._locate_spans([("Dupont", "NOM", 0.9)], "M. Martin")
 
 
 def test_les_positions_renvoyees_designent_exactement_le_texte():
     content = "Martin et Mariette ; Martin, Marie."
-    spans = LLMDetector._locate_spans([("Martin", "NOM"), ("Marie", "PRENOM")], content)
+    spans = LLMDetector._locate_spans(
+        [("Martin", "NOM", 0.9), ("Marie", "PRENOM", 0.8)], content
+    )
 
     assert [(s.text, s.start, s.end) for s in spans] == [
         ("Martin", 0, 6),
