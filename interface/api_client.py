@@ -55,7 +55,7 @@ class ApiClient:
         """
         POST /documents/analyser : liste des PII détectées.
 
-        Chaque élément est un dictionnaire avec les clés texte, type, debut, fin, detecteur.
+        Chaque élément est un dictionnaire avec les clés texte, type, debut, fin, detecteur, confiance.
         Aucune trace n'est archivée côté API pour une simple analyse.
         """
         reponse = self._requete("POST", "/documents/analyser", json={"contenu": contenu})

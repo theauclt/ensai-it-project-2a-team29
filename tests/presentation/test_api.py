@@ -158,6 +158,7 @@ def test_analyser_renvoie_les_pii_avec_positions(client, archive):
     assert pii["type"] == "EMAIL"
     assert DOCUMENT[pii["debut"]:pii["fin"]] == pii["texte"] == "jean@mail.fr"
     assert pii["detecteur"] == "RegexDetector"
+    assert pii["confiance"] == 1.0  # les expressions régulières sont toujours sûres
     assert archive.entries == []  # analyser n'archive rien
 
 

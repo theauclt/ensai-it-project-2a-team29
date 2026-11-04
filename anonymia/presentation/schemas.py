@@ -38,6 +38,7 @@ class PIIResponse(BaseModel):
     debut: int
     fin: int
     detecteur: str
+    confiance: float = Field(ge=0, le=1, description="Fiabilité de la détection, de 0 à 1")
 
 
 class AnalyseResponse(BaseModel):

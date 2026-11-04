@@ -376,3 +376,61 @@ async def test_detection_service_ignore_detecteur_en_erreur():
     assert len(spans) == 1
     assert spans[0].type == "EMAIL"
     assert detectors_ok == ["FakeRegexDetector"]
+
+
+# ---------------------------------------------------------------------------
+# Niveau de confiance (F2)
+# ---------------------------------------------------------------------------
+
+
+def with_confidence(*items: tuple[str, str, object]) -> str:
+    return json.dumps({"entites": [{"texte": t, "type": ty, "confiance": c} for t, ty, c in items]})
+
+
+async def test_confiance_fournie_par_le_llm_est_transmise():
+    content = "Madame Claire Martin habite à Paris."
+    detector = make_detector(
+        reply_with(with_confidence(("Martin", "NOM", 0.95), ("Paris", "LIEU", 0.6)))
+    )
+
+    spans = await detector.detect(content)
+
+    assert {s.text: s.confidence for s in spans} == {"Martin": 0.95, "Paris": 0.6}
+
+
+async def test_confiance_absente_vaut_la_valeur_par_defaut():
+    detector = make_detector(reply_with(entities(("Martin", "NOM"))))
+
+    (span,) = await detector.detect("Madame Martin.")
+
+    assert span.confidence == 0.5
+
+
+@pytest.mark.parametrize("valeur", [0, 1, 0.0, 1.0])
+async def test_confiance_aux_bornes_est_acceptee(valeur):
+    detector = make_detector(reply_with(with_confidence(("Martin", "NOM", valeur))))
+
+    (span,) = await detector.detect("Madame Martin.")
+
+    assert span.confidence == float(valeur)
+
+
+@pytest.mark.parametrize("valeur", [7, -0.1, 1.01, "élevée", None, True, [0.9]])
+async def test_confiance_invalide_leve_une_erreur(valeur):
+    detector = make_detector(reply_with(with_confidence(("Martin", "NOM", valeur))))
+
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Madame Martin.")
+
+
+async def test_champ_inconnu_dans_une_entite_reste_refuse():
+    reponse = json.dumps({"entites": [{"texte": "Martin", "type": "NOM", "confiance": 0.9, "note": "x"}]})
+    detector = make_detector(reply_with(reponse))
+
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Madame Martin.")
+
+
+def test_le_prompt_demande_une_confiance():
+    assert "confiance" in SYSTEM_PROMPT
+
