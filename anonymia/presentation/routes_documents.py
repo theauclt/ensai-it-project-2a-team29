@@ -15,6 +15,9 @@ from .security import get_current_user
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
+# Sans réponse du LLM, seules les règles (regex) ont tourné : c'est le mode dégradé
+DETECTEUR_LLM = "LLMDetector"
+
 
 @router.post("/analyser", response_model=AnalyseResponse)
 async def analyser(
@@ -23,8 +26,11 @@ async def analyser(
     service: DetectionService = Depends(get_detection_service),
 ) -> AnalyseResponse:
     """Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle)."""
-    spans = await service.analyze(body.contenu)
+    spans, detecteurs = await service.analyze_with_status(body.contenu)
     return AnalyseResponse(
+        detecteurs=detecteurs,
+        mode_degrade=DETECTEUR_LLM not in detecteurs,
+        types_injection=service.injection_types(body.contenu),
         pii=[
             PIIResponse(
                 texte=s.text, type=s.type, debut=s.start, fin=s.end, detecteur=s.source_detector
@@ -50,6 +56,7 @@ async def caviarder(
     if resultat.confirmation_requise:
         return CaviardageResponse(
             confirmation_requise=True,
+            types_injection=resultat.types_injection,
             avertissements=[
                 (
                     "Ce document contient des motifs ressemblant à une injection de prompt. "
@@ -61,7 +68,13 @@ async def caviarder(
     avertissements = []
     if resultat.types_injection:
         avertissements.append("Injection de prompt suspectée : relisez attentivement le résultat.")
-    return CaviardageResponse(document_caviarde=resultat.document, avertissements=avertissements)
+    return CaviardageResponse(
+        document_caviarde=resultat.document,
+        avertissements=avertissements,
+        detecteurs=resultat.detecteurs,
+        mode_degrade=DETECTEUR_LLM not in resultat.detecteurs,
+        types_injection=resultat.types_injection,
+    )
 
 
 @router.get("/strategies", response_model=StrategiesResponse)

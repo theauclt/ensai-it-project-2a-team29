@@ -38,12 +38,18 @@ class PIIResponse(BaseModel):
     debut: int
     fin: int
     detecteur: str
+    confiance: float = Field(ge=0, le=1, description="Fiabilité de la détection, de 0 à 1")
 
 
 class AnalyseResponse(BaseModel):
     """Réponse de POST /documents/analyser."""
 
     pii: list[PIIResponse]
+    # Détecteurs qui ont répondu ; si le LLM n'y figure pas, l'analyse est en mode dégradé
+    detecteurs: list[str] = []
+    mode_degrade: bool = False
+    # Catégories d'injection de prompt repérées (l'analyse n'est pas bloquée pour autant)
+    types_injection: list[str] = []
 
 
 class CaviardageResponse(BaseModel):
@@ -52,6 +58,9 @@ class CaviardageResponse(BaseModel):
     document_caviarde: str | None = None
     confirmation_requise: bool = False
     avertissements: list[str] = []
+    detecteurs: list[str] = []
+    mode_degrade: bool = False
+    types_injection: list[str] = []
 
 
 class StrategiesResponse(BaseModel):
@@ -70,6 +79,7 @@ class TraitementResponse(BaseModel):
     strategie_anonymisation: str
     detecteurs_contributeurs: str
     nb_pii_detectees: int
+    types_pii: dict[str, int] = Field(default_factory=dict, description="Nombre de PII par type, ex. {'EMAIL': 2}")
     injection_suspectee: bool = False
 
 
@@ -101,3 +111,4 @@ class UtilisateurResponse(BaseModel):
     role: str
     est_active: bool
     date_creation: datetime | None = None
+

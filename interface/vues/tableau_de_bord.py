@@ -139,6 +139,20 @@ if resultat is not None:
             use_container_width=True,
         )
 
+    st.subheader("Données détectées par type")
+    if synthese["par_type"]:
+        st.altair_chart(
+            graphiques.barres_horizontales(synthese["par_type"], "Type de donnée", "Données"),
+            use_container_width=True,
+        )
+    else:
+        st.info("Aucun type de donnée enregistré sur cette période.")
+    if synthese["traitements_sans_types"]:
+        st.caption(
+            f"{synthese['traitements_sans_types']} traitement(s) plus ancien(s) n'ont pas de détail par type "
+            "et ne sont pas comptés dans ce graphique."
+        )
+
     gauche, droite = st.columns(2)
     with gauche:
         st.subheader("Stratégie choisie")

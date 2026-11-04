@@ -158,6 +158,7 @@ def test_analyser_renvoie_les_pii_avec_positions(client, archive):
     assert pii["type"] == "EMAIL"
     assert DOCUMENT[pii["debut"]:pii["fin"]] == pii["texte"] == "jean@mail.fr"
     assert pii["detecteur"] == "RegexDetector"
+    assert pii["confiance"] == 1.0  # les expressions régulières sont toujours sûres
     assert archive.entries == []  # analyser n'archive rien
 
 
@@ -321,8 +322,22 @@ def test_les_journaux_ne_contiennent_jamais_le_contenu(client, archive):
     assert set(response.json()[0]) == {
         "id", "user_id", "date_traitement", "hash_document",
         "strategie_anonymisation", "detecteurs_contributeurs", "nb_pii_detectees",
-        "injection_suspectee",
+        "injection_suspectee", "types_pii",
     }
+
+
+def test_les_journaux_donnent_les_types_de_pii_sans_leur_contenu(client, archive):
+    headers = en_tete(client, "sup")
+    document = "Écrire à jean@mail.fr, marie@mail.fr ou au 06 12 34 56 78."
+    client.post("/documents/caviarder", json={"contenu": document}, headers=headers)
+
+    response = client.get("/journaux", headers=headers)
+
+    (entree,) = response.json()
+    assert entree["types_pii"] == {"EMAIL": 2, "TELEPHONE": 1}
+    assert entree["nb_pii_detectees"] == 3
+    assert "jean@mail.fr" not in response.text
+    assert "06 12" not in response.text
 
 
 def test_les_dates_sans_fuseau_de_la_base_sont_renvoyees_en_utc(client, archive):
@@ -333,6 +348,7 @@ def test_les_dates_sans_fuseau_de_la_base_sont_renvoyees_en_utc(client, archive)
     response = client.get("/journaux", headers=en_tete(client, "sup"))
 
     assert response.json()[0]["date_traitement"].endswith(("Z", "+00:00"))
+    assert response.json()[0]["types_pii"] == {}  # traitement ancien, sans types
 
 
 # ---------------------------------------------------------------------------
@@ -442,3 +458,44 @@ def test_admin_ne_peut_pas_se_supprimer_ni_se_desactiver(client):
     assert client.patch(
         "/admin/utilisateurs/3/activation", headers=h, json={"est_active": False}
     ).status_code == 409
+
+# ---------------------------------------------------------------------------
+# Signaux affichés par l'interface : mode dégradé et injection
+# ---------------------------------------------------------------------------
+
+def test_analyser_sans_llm_signale_le_mode_degrade(client):
+    corps = client.post(
+        "/documents/analyser", json={"contenu": DOCUMENT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["detecteurs"] == ["RegexDetector"]
+    assert corps["mode_degrade"] is True
+    assert corps["types_injection"] == []
+
+
+def test_analyser_signale_l_injection_sans_bloquer(client):
+    corps = client.post(
+        "/documents/analyser", json={"contenu": SUSPECT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["types_injection"]
+    assert "pii" in corps
+
+
+def test_caviarder_sans_llm_signale_le_mode_degrade(client):
+    corps = client.post(
+        "/documents/caviarder", json={"contenu": DOCUMENT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["mode_degrade"] is True
+    assert corps["detecteurs"] == ["RegexDetector"]
+
+
+def test_confirmation_requise_donne_les_types_d_injection(client):
+    corps = client.post(
+        "/documents/caviarder", json={"contenu": SUSPECT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["confirmation_requise"] is True
+    assert corps["types_injection"]
+    assert corps["mode_degrade"] is False  # aucun détecteur n'a tourné
