@@ -5,9 +5,16 @@ puis obtenir le texte caviardé.
 Mise en page : à gauche le document source, à droite le résultat (texte analysé ou
 caviardé), et en dessous le détail des détections ou des remplacements.
 
+Deux situations sont signalées par un bandeau au-dessus des volets :
+- le mode dégradé : le LLM n'a pas répondu, seules les règles automatiques ont tourné ;
+- l'injection de prompt : le texte contient des consignes destinées au LLM. Le caviardage
+  est alors suspendu par l'API jusqu'à ce que l'utilisateur confirme.
+
 Rappel Streamlit : le script est relancé à chaque clic. Ce qui doit survivre d'un clic
 à l'autre (le texte, le dernier résultat) est donc rangé dans st.session_state.
 """
+import html
+
 import session
 import streamlit as st
 import surlignage
@@ -23,6 +30,14 @@ LIBELLES_STRATEGIES = {
 AIDES_STRATEGIES = {
     "masking": "Chaque donnée est remplacée par un marqueur : [EMAIL_1], [NOM_2]…",
     "pseudonymization": "Chaque donnée est remplacée par une valeur fictive du même type.",
+}
+
+# Catégories renvoyées par le filtre d'injection (service/prompt_injector_detector.py)
+LIBELLES_INJECTION = {
+    "instruction_override": "Contournement des consignes",
+    "role_manipulation": "Changement de rôle",
+    "prompt_extraction": "Extraction du prompt",
+    "data_exfiltration": "Exfiltration de données",
 }
 
 EXEMPLE = (
@@ -45,6 +60,10 @@ def _nombre(n: int) -> str:
 
 def _pluriel(n: int, mot: str) -> str:
     return f"{_nombre(n)} {mot}{'s' if n > 1 else ''}"
+
+
+def _categories(types_injection: list[str]) -> list[str]:
+    return [LIBELLES_INJECTION.get(t, t) for t in types_injection]
 
 
 def _donnees(n: int) -> str:
@@ -82,6 +101,10 @@ def _inserer_exemple() -> None:
     st.session_state["contenu"] = EXEMPLE
 
 
+def _annuler_confirmation() -> None:
+    st.session_state.pop("resultat", None)
+
+
 def _effacer() -> None:
     """Vide le texte, le résultat et le fichier importé."""
     st.session_state["contenu"] = ""
@@ -100,12 +123,91 @@ def _entete_volet(titre: str, meta: str = "", pastille: str = "") -> None:
     st.html(f'<div class="an-volet"><h2>{titre}</h2>{droite}</div>')
 
 
+def _bandeaux(resultat: dict) -> None:
+    """Avertissements à lire avant le résultat : mode dégradé, injection de prompt."""
+    if resultat["type"] == "confirmation":
+        return  # le volet de résultat porte déjà l'alerte et la décision à prendre
+    categories = _categories(resultat.get("types_injection", []))
+    if categories and resultat["type"] == "caviardage":
+        theme.alerte(
+            "Traité malgré une injection de prompt suspectée",
+            "Vous avez confirmé le traitement. Il est signalé dans l'historique : "
+            "relisez attentivement le document caviardé avant de le diffuser.",
+            categories,
+        )
+    elif categories:
+        theme.alerte(
+            "Injection de prompt suspectée",
+            "Ce texte contient des consignes adressées au LLM. L'analyse a eu lieu, mais le caviardage "
+            "vous demandera une confirmation et le résultat devra être relu.",
+            categories,
+        )
+    if resultat.get("mode_degrade"):
+        theme.alerte(
+            "Mode dégradé : le LLM n'a pas répondu",
+            "Seules les règles automatiques ont été appliquées (e-mails, téléphones, IBAN, "
+            "n° de sécurité sociale, plaques). Les noms, prénoms, lieux, adresses, organisations "
+            "et dates peuvent avoir échappé à la détection : relisez le document avant de le diffuser.",
+        )
+
+
+def _volet_confirmation(resultat: dict, perime: bool) -> None:
+    """Volet de droite quand l'API a suspendu le caviardage pour injection de prompt."""
+    _entete_volet("Document non traité", pastille="Texte modifié depuis ce contrôle" if perime else "")
+    puces = "".join(f"<span>{html.escape(c)}</span>" for c in _categories(resultat["types_injection"]))
+    st.html(
+        '<div class="an-page bloque" role="alert">'
+        "<strong>Injection de prompt suspectée</strong>"
+        "<p>Ce texte contient des passages qui ressemblent à des consignes destinées au LLM. "
+        "Par précaution, il n'a été ni caviardé ni archivé.</p>"
+        f'<div class="an-categories">{puces}</div>'
+        '<p style="margin-top:14px">Si le document est légitime (une citation, un exemple de sécurité…), '
+        "vous pouvez le caviarder quand même. Le traitement sera signalé dans l'historique "
+        "et le résultat devra être relu.</p></div>"
+    )
+    col_confirmer, col_annuler, _ = st.columns([1.5, 1, 1], gap="small")
+    confirmer = col_confirmer.button(
+        "Caviarder quand même",
+        icon=":material/warning:",
+        disabled=perime,
+        width="stretch",
+        help="Le texte a changé depuis ce contrôle : relancez le caviardage." if perime else None,
+    )
+    col_annuler.button("Annuler", type="tertiary", on_click=_annuler_confirmation, width="stretch")
+    if confirmer:
+        try:
+            with st.spinner("Caviardage en cours, le LLM peut prendre quelques secondes…"):
+                reponse = client.caviarder(resultat["contenu"], resultat["strategie"], confirmer=True)
+        except ApiError as erreur:
+            session.afficher_erreur_api(erreur)
+        else:
+            st.session_state["resultat"] = _resultat_caviardage(resultat["contenu"], resultat["strategie"], reponse)
+            st.rerun()
+
+
+def _resultat_caviardage(contenu: str, strategie: str, reponse: dict) -> dict:
+    """Range la réponse de l'API dans l'état de la page."""
+    commun = {
+        "contenu": contenu,
+        "strategie": strategie,
+        "mode_degrade": reponse["mode_degrade"],
+        "types_injection": reponse["types_injection"],
+    }
+    if reponse["confirmation_requise"]:
+        return {"type": "confirmation", **commun}
+    return {"type": "caviardage", "caviarde": reponse["caviarde"], **commun}
+
+
 def _volet_resultat(resultat: dict | None, perime: bool) -> None:
     """Volet de droite : le texte analysé, le texte caviardé, ou la marche à suivre."""
     pastille = "Texte modifié depuis ce résultat" if perime else ""
     if resultat is None:
         _entete_volet("Résultat")
         st.html(surlignage.page_vide_html())
+        return
+
+    if resultat["type"] == "confirmation":
+        _volet_confirmation(resultat, perime)
         return
 
     if resultat["type"] == "analyse":
@@ -197,22 +299,21 @@ if analyser_clique or caviarder_clique:
         try:
             if analyser_clique:
                 with st.spinner("Analyse en cours, le LLM peut prendre quelques secondes…"):
-                    pii = client.analyser(contenu)
-                st.session_state["resultat"] = {"type": "analyse", "contenu": contenu, "pii": pii}
+                    reponse = client.analyser(contenu)
+                st.session_state["resultat"] = {"type": "analyse", "contenu": contenu, **reponse}
             else:
                 with st.spinner("Caviardage en cours, le LLM peut prendre quelques secondes…"):
-                    caviarde = client.caviarder(contenu, strategie)
-                st.session_state["resultat"] = {
-                    "type": "caviardage",
-                    "contenu": contenu,
-                    "strategie": strategie,
-                    "caviarde": caviarde,
-                }
+                    reponse = client.caviarder(contenu, strategie)
+                st.session_state["resultat"] = _resultat_caviardage(contenu, strategie, reponse)
         except ApiError as erreur:
             session.afficher_erreur_api(erreur)
 
 resultat = st.session_state.get("resultat")
 perime = bool(resultat) and resultat["contenu"] != contenu
+
+if resultat:
+    _bandeaux(resultat)
+    st.space("small")
 
 col_source, col_resultat = st.columns(2, gap="large")
 
@@ -239,6 +340,6 @@ with col_source:
 with col_resultat:
     _volet_resultat(resultat, perime)
 
-if resultat:
+if resultat and resultat["type"] != "confirmation":
     st.space("medium")
     _detail(resultat)

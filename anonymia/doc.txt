@@ -485,9 +485,10 @@ Pour qu'un bug soit reproductible, indiquez :
 Ne collez jamais de vrai document personnel, de mot de passe, de cle API ni le
 contenu de votre fichier .env dans un message ou une issue.
 
---------------
-interface
---------------
+--------------------------------------------------------------------------------
+13. INTERFACE
+--------------------------------------------------------------------------------
+
 L'interface Streamlit est un site web qui appelle l'API : elle ne contient pas de
 logique de detection ni de comptes, tout passe par les routes de la partie 6.
 Elle doit donc etre lancee APRES l'API.

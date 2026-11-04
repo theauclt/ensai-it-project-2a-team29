@@ -41,6 +41,10 @@ _CSS = """
   --an-accent-pale: #e3eff2;
   --an-warning-bg: #fffbeb;
   --an-warning-ink: #92400e;
+  --an-warning-edge: #f3e3b5;
+  --an-negative-bg: #fff3f1;
+  --an-negative-ink: #831c1e;
+  --an-negative-edge: #f5d0ca;
   --an-radius-sheet: 16px;
   --an-radius-card: 8px;
   --an-radius-control: 6px;
@@ -165,6 +169,38 @@ h1 { padding: 0 !important; }
 }
 .an-pastille.neutre { background: var(--an-active); color: #353736; }
 
+/* ---------- Alertes : mode dégradé, injection de prompt ---------- */
+.an-alerte {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--an-warning-bg); border: 1px solid var(--an-warning-edge); border-radius: var(--an-radius-card);
+  padding: 12px 16px; color: var(--an-ink);
+}
+.an-alerte .an-signe {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; margin-top: 1px;
+  background: var(--an-warning-ink); color: #ffffff; display: grid; place-items: center;
+  font-size: 13px; font-weight: 600; line-height: 1;
+}
+.an-alerte strong { display: block; font-size: 14px; font-weight: 600; color: var(--an-warning-ink); line-height: 1.45; }
+.an-alerte p { margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: var(--an-ink); max-width: 96ch; }
+.an-alerte.grave { background: var(--an-negative-bg); border-color: var(--an-negative-edge); }
+.an-alerte.grave .an-signe { background: var(--an-negative-ink); }
+.an-alerte.grave strong { color: var(--an-negative-ink); }
+.an-categories { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.an-categories span {
+  flex: none; white-space: nowrap; font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 4px;
+  background: #ffffff; color: var(--an-negative-ink); border: 1px solid var(--an-negative-edge);
+}
+.an-alerte:not(.grave) .an-categories span { color: var(--an-warning-ink); border-color: var(--an-warning-edge); }
+
+/* Volet de résultat quand l'API demande une confirmation */
+.an-page.bloque {
+  white-space: normal; height: auto; min-height: 0; overflow: visible;
+  background: var(--an-negative-bg); border-color: var(--an-negative-edge); padding: 24px 28px;
+}
+.an-page.bloque strong { display: block; font-size: 16px; font-weight: 600; color: var(--an-negative-ink); margin-bottom: 6px; }
+.an-page.bloque p { margin: 0 0 10px; color: var(--an-ink); max-width: 60ch; }
+.an-page.bloque .an-categories { margin: 4px 0 4px; }
+
 /* ---------- Le document ---------- */
 .an-page {
   height: 480px; overflow: auto; box-sizing: border-box;
@@ -233,6 +269,22 @@ h1 { padding: 0 !important; }
 def appliquer() -> None:
     """Injecte la feuille de style de l'application (à appeler une fois par exécution)."""
     st.html(_CSS)
+
+
+def alerte(titre: str, texte: str, categories: list[str] | None = None, grave: bool = False) -> None:
+    """
+    Bandeau d'alerte : un titre, une phrase d'explication et, si besoin, des catégories.
+
+    grave=True pour ce qui demande une décision (texte non traité), sinon un simple avertissement.
+    """
+    puces = ""
+    if categories:
+        puces = '<div class="an-categories">' + "".join(f"<span>{html.escape(c)}</span>" for c in categories) + "</div>"
+    classe = "an-alerte grave" if grave else "an-alerte"
+    st.html(
+        f'<div class="{classe}" role="alert"><span class="an-signe" aria-hidden="true">!</span>'
+        f"<div><strong>{html.escape(titre)}</strong><p>{html.escape(texte)}</p>{puces}</div></div>"
+    )
 
 
 def entete(titre: str, sous_titre: str | None = None) -> None:

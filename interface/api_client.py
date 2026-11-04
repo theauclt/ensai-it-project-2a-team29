@@ -51,22 +51,53 @@ class ApiClient:
         reponse = self._requete("GET", "/documents/strategies")
         return self._champ(reponse, "strategies")
 
-    def analyser(self, contenu: str) -> list[dict]:
+    def analyser(self, contenu: str) -> dict:
         """
-        POST /documents/analyser : liste des PII détectées.
+        POST /documents/analyser : PII détectées et état de l'analyse.
 
-        Chaque élément est un dictionnaire avec les clés texte, type, debut, fin, detecteur, confiance.
+        Renvoie un dictionnaire :
+          pii             : liste de PII (clés texte, type, debut, fin, detecteur) ;
+          mode_degrade    : True si le LLM n'a pas répondu (seules les règles ont tourné) ;
+          types_injection : catégories d'injection de prompt repérées (vide sinon).
         Aucune trace n'est archivée côté API pour une simple analyse.
         """
-        reponse = self._requete("POST", "/documents/analyser", json={"contenu": contenu})
-        return self._champ(reponse, "pii")
+        donnees = self._objet(self._requete("POST", "/documents/analyser", json={"contenu": contenu}))
+        if not isinstance(donnees.get("pii"), list):
+            raise ApiError("Réponse inattendue de l'API.")
+        return {
+            "pii": donnees["pii"],
+            "mode_degrade": bool(donnees.get("mode_degrade", False)),
+            "types_injection": list(donnees.get("types_injection") or []),
+        }
 
-    def caviarder(self, contenu: str, strategie: str) -> str:
-        """POST /documents/caviarder : renvoie le document caviardé (le traitement est archivé)."""
-        reponse = self._requete(
-            "POST", "/documents/caviarder", json={"contenu": contenu, "strategie": strategie}
+    def caviarder(self, contenu: str, strategie: str, confirmer: bool = False) -> dict:
+        """
+        POST /documents/caviarder : document caviardé (le traitement est archivé).
+
+        Renvoie un dictionnaire :
+          caviarde             : le texte caviardé, ou None si l'API demande une confirmation ;
+          confirmation_requise : True si le texte ressemble à une injection de prompt et n'a
+                                 pas été traité (le renvoyer avec confirmer=True pour le traiter) ;
+          mode_degrade, types_injection, avertissements : comme pour analyser.
+        """
+        donnees = self._objet(
+            self._requete(
+                "POST",
+                "/documents/caviarder",
+                json={"contenu": contenu, "strategie": strategie, "confirmer": confirmer},
+            )
         )
-        return self._champ(reponse, "document_caviarde")
+        confirmation = bool(donnees.get("confirmation_requise", False))
+        caviarde = donnees.get("document_caviarde")
+        if not confirmation and not isinstance(caviarde, str):
+            raise ApiError("Réponse inattendue de l'API.")
+        return {
+            "caviarde": caviarde,
+            "confirmation_requise": confirmation,
+            "mode_degrade": bool(donnees.get("mode_degrade", False)),
+            "types_injection": list(donnees.get("types_injection") or []),
+            "avertissements": list(donnees.get("avertissements") or []),
+        }
 
     def journaux(
         self,
