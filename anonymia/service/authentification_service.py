@@ -1,8 +1,8 @@
 import bcrypt
 
 from .business_objects.user import User
-from .mots_de_passe import MOT_DE_PASSE_MIN, hasher_mot_de_passe
 from .interfaces.user_repository import UserRepository
+from .mots_de_passe import MOT_DE_PASSE_MIN, hasher_mot_de_passe
 
 
 class AuthentificationService:

@@ -4,8 +4,9 @@ from pathlib import Path
 # L'interface n'est pas un paquet : on ajoute son dossier au chemin, comme le fait Streamlit
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "interface"))
 
-import journal  # noqa: E402
-from zoneinfo import ZoneInfo  # noqa: E402
+from zoneinfo import ZoneInfo
+
+import journal
 
 TZ = ZoneInfo("UTC")
 

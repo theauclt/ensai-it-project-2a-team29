@@ -18,6 +18,7 @@ class AuditEntry:
         strategie_anonymisation: str,
         detecteurs_contributeurs: str,
         nb_pii_detectees: int,
+        injection_suspectee: bool = False,
         id: int | None = None,
     ) -> None:
         self.id = id
@@ -27,3 +28,4 @@ class AuditEntry:
         self.strategie_anonymisation = strategie_anonymisation
         self.detecteurs_contributeurs = detecteurs_contributeurs
         self.nb_pii_detectees = nb_pii_detectees
+        self.injection_suspectee = injection_suspectee

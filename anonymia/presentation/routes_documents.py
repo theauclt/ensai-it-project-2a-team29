@@ -46,8 +46,22 @@ async def caviarder(
             status.HTTP_400_BAD_REQUEST,
             f"Stratégie inconnue. Disponibles : {', '.join(service.available_strategies())}",
         )
-    document = await service.detect(body.contenu, body.strategie, user.id)
-    return CaviardageResponse(document_caviarde=document)
+    resultat = await service.detect(body.contenu, body.strategie, user.id, body.confirmer)
+    if resultat.confirmation_requise:
+        return CaviardageResponse(
+            confirmation_requise=True,
+            avertissements=[
+                (
+                    "Ce document contient des motifs ressemblant à une injection de prompt. "
+                    "Il n'a pas été traité. Pour le traiter quand même, renvoyez la même "
+                    'requête avec "confirmer": true (relecture humaine indispensable).'
+                )
+            ],
+        )
+    avertissements = []
+    if resultat.types_injection:
+        avertissements.append("Injection de prompt suspectée : relisez attentivement le résultat.")
+    return CaviardageResponse(document_caviarde=resultat.document, avertissements=avertissements)
 
 
 @router.get("/strategies", response_model=StrategiesResponse)

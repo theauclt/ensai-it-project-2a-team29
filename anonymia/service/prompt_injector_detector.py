@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 class PromptInjectionDetector:
@@ -64,7 +64,7 @@ class PromptInjectionDetector:
         Journalise uniquement le type et la date.
         """
 
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         for event_type in detected_types:
             self.logger.warning(

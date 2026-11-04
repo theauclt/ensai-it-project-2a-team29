@@ -43,6 +43,7 @@ async def lister_traitements(
             strategie_anonymisation=e.strategie_anonymisation,
             detecteurs_contributeurs=e.detecteurs_contributeurs,
             nb_pii_detectees=e.nb_pii_detectees,
+            injection_suspectee=e.injection_suspectee,
         )
         for e in entries
     ]
