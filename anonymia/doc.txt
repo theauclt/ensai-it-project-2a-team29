@@ -257,6 +257,15 @@ H2. Administration : avec le compte ADMIN
    Le role est lu dans le jeton : une desactivation ou un changement de role
    ne prend effet sur un jeton deja emis qu'a son expiration (30 minutes).
 
+H3. Tableau de bord (interface Streamlit, parties "interface" en fin de fichier)
+   Faire d'abord quelques "caviarder" avec des comptes differents, puis :
+   - compte SUPERVISOR ou ADMIN : la page "Tableau de bord" est dans le menu
+     et affiche les chiffres, l'alerte eventuelle et les graphiques
+   - filtre sur un login ou une periode : tous les chiffres changent
+   - compte USER : la page n'apparait pas dans le menu
+   - API lancee avec LLM_ENABLED=false, puis quelques "caviarder" : l'alerte
+     "traitements faits sans le LLM" apparait
+
 I. Erreurs attendues
    - Appeler un endpoint sans etre connecte ............... 401
    - "strategie": "magie" ................................. 400
@@ -344,15 +353,19 @@ pip install : erreur sur un paquet "installe par le systeme"
 11. LIMITES CONNUES (v0)
 --------------------------------------------------------------------------------
 
+Choix assume : pas d'inscription libre. Les comptes sont crees par
+l'administrateur via /admin/utilisateurs (le premier au demarrage, via
+ADMIN_LOGIN et ADMIN_PASSWORD, ou avec scripts/create_user.py).
+
 Pas encore disponible :
-- inscription libre et deconnexion (les comptes sont crees par l'administrateur
-  via /admin/utilisateurs ; le premier est cree au demarrage via ADMIN_LOGIN et
-  ADMIN_PASSWORD, ou avec scripts/create_user.py)
+- deconnexion cote API (l'interface Streamlit propose un bouton "Se deconnecter")
 - revocation immediate des jetons (voir H2)
 - detail d'un traitement (/journaux/{id})
-- interface graphique (Streamlit)
-- pre-filtre contre l'injection de prompt (seuls le prompt strict et la
-  verification de la sortie du LLM sont en place)
+- repartition des donnees detectees par type (nom, email, IBAN...) dans le
+  tableau de bord : l'historique n'enregistre que leur nombre
+- blocage des documents suspects : le pre-filtre contre l'injection de prompt
+  (PromptInjectionDetector) detecte quelques formulations connues et les
+  journalise, mais le traitement continue ; pas encore de tests adversariaux
 
 Comportements a connaitre :
 - le jeton dure 30 minutes et n'est pas reverifie en base : un compte desactive
@@ -379,9 +392,77 @@ Pour qu'un bug soit reproductible, indiquez :
 Ne collez jamais de vrai document personnel, de mot de passe, de cle API ni le
 contenu de votre fichier .env dans un message ou une issue.
 
---------------------------------------------------------------------------------
-13.INTERFACE APPLICATION
---------------------------------------------------------------------------------
-Exécutez dans un 2ème Terminal dans le dossier racine du projet :
+--------------
+interface
+--------------
+L'interface Streamlit est un site web qui appelle l'API : elle ne contient pas de
+logique de detection ni de comptes, tout passe par les routes de la partie 6.
+Elle doit donc etre lancee APRES l'API.
+
+Executez dans un 2eme Terminal :
    source .venv/bin/activate
    python -m streamlit run interface/app.py
+
+Pages, selon le role du compte connecte (le menu n'affiche que celles permises ;
+l'API controle de toute facon les droits et renvoie 403 sinon) :
+
+   Connexion ............ avant la connexion
+   Caviardage ........... tous les comptes connectes
+   Tableau de bord ...... SUPERVISOR et ADMIN
+   Historique ........... SUPERVISOR et ADMIN
+   Administration ....... ADMIN seulement
+
+Page "Tableau de bord"
+   Vue de synthese de l'activite, pour savoir en un coup d'oeil comment
+   l'application est utilisee, la ou la page "Historique" liste les traitements
+   un par un. Elle utilise les memes donnees (GET /journaux) : uniquement des
+   metadonnees, jamais le texte des documents.
+
+   Filtres (en haut, bouton "Afficher") : login d'un utilisateur, date de debut
+   et date de fin. Tous les chiffres ci-dessous suivent ces filtres.
+
+   Chiffres cles :
+   - Traitements ............... nombre de documents caviardes
+   - Donnees detectees ......... total des donnees personnelles trouvees
+   - Moyenne par document ...... donnees detectees / traitements
+   - Utilisateurs actifs ....... nombre de comptes ayant fait au moins un
+                                 traitement sur la periode
+
+   Alerte "sans LLM" : affichee des qu'au moins un traitement a ete fait sans
+   la detection par LLM. Elle donne leur nombre et leur part du total :
+
+       pourcentage = traitements sans LLM / traitements total x 100
+       exemple : 2 sans LLM sur 10 traitements -> 20 %
+
+   Comment l'application le sait : chaque traitement archive la liste des
+   detecteurs qui ont repondu ("Regex + LLM", ou "Regex seul" si le LLM n'a
+   pas repondu). Un traitement dont la liste ne contient pas le LLM compte
+   comme "sans LLM".
+
+   Pourquoi c'est important : sans le LLM, seules les expressions regulieres
+   travaillent (email, telephone, IBAN...). Les noms, lieux et dates de
+   naissance, que seul le LLM detecte, peuvent alors ne pas etre caviardes.
+
+   Comment lire le pourcentage :
+   - 0 %  : le LLM a toujours repondu, tout va bien
+   - quelques % : pannes ponctuelles, a surveiller
+   - beaucoup plus eleve qu'a l'habitude : le service LLM a sans doute un
+     probleme. La page ne montre pas l'evolution dans le temps : pour comparer,
+     changer la periode avec les filtres (par exemple aujourd'hui et la
+     semaine derniere).
+   - 100 % : normal si l'API a ete lancee avec LLM_ENABLED=false (le LLM n'est
+     alors jamais utilise), pas forcement une panne.
+
+   Graphiques :
+   - Activite par jour (si la periode couvre plusieurs jours)
+   - Par utilisateur : qui traite combien de documents, du plus actif au moins actif
+   - Par strategie : masquage ou pseudonymisation
+   - Par detecteurs : "Regex + LLM" ou "Regex seul"
+
+   Limites :
+   - Un SUPERVISOR voit les utilisateurs par numero (n°2) et non par login :
+     seul un ADMIN peut lire la liste des comptes.
+   - Pas de repartition par type de donnee (nom, email, IBAN...) : la base
+     n'enregistre que le nombre de donnees detectees par traitement.
+   - Les jours sont comptes dans le fuseau du navigateur (Paris par defaut),
+     mais les filtres "Du" et "Au" comptent des jours UTC.
