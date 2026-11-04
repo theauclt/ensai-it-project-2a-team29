@@ -428,11 +428,30 @@ Page "Tableau de bord"
    - Utilisateurs actifs ....... nombre de comptes ayant fait au moins un
                                  traitement sur la periode
 
-   Alerte "sans LLM" : affichee s'il y a des traitements faits sans la
-   detection par LLM (nombre et pourcentage). Cela arrive quand le service LLM
-   est indisponible (mode degrade) ou quand l'API est lancee avec
-   LLM_ENABLED=false. Un pourcentage qui monte soudainement signale donc un
-   probleme du service LLM.
+   Alerte "sans LLM" : affichee des qu'au moins un traitement a ete fait sans
+   la detection par LLM. Elle donne leur nombre et leur part du total :
+
+       pourcentage = traitements sans LLM / traitements total x 100
+       exemple : 2 sans LLM sur 10 traitements -> 20 %
+
+   Comment l'application le sait : chaque traitement archive la liste des
+   detecteurs qui ont repondu ("Regex + LLM", ou "Regex seul" si le LLM n'a
+   pas repondu). Un traitement dont la liste ne contient pas le LLM compte
+   comme "sans LLM".
+
+   Pourquoi c'est important : sans le LLM, seules les expressions regulieres
+   travaillent (email, telephone, IBAN...). Les noms, lieux et dates de
+   naissance, que seul le LLM detecte, peuvent alors ne pas etre caviardes.
+
+   Comment lire le pourcentage :
+   - 0 %  : le LLM a toujours repondu, tout va bien
+   - quelques % : pannes ponctuelles, a surveiller
+   - beaucoup plus eleve qu'a l'habitude : le service LLM a sans doute un
+     probleme. La page ne montre pas l'evolution dans le temps : pour comparer,
+     changer la periode avec les filtres (par exemple aujourd'hui et la
+     semaine derniere).
+   - 100 % : normal si l'API a ete lancee avec LLM_ENABLED=false (le LLM n'est
+     alors jamais utilise), pas forcement une panne.
 
    Graphiques :
    - Activite par jour (si la periode couvre plusieurs jours)
