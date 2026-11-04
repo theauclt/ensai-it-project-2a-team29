@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from .business_objects.anonymization_result import AnonymizationResult
 from .business_objects.audit_entry import AuditEntry
-from .business_objects.injection_verdict import INJECTION_TYPES, JUDGE_STATUSES, InjectionVerdict
+from .business_objects.injection_verdict import InjectionVerdict, metadonnees_juge
 from .business_objects.pii_span import PIISpan
 from .interfaces.archive_repository import ArchiveRepository
 from .interfaces.injection_judge import InjectionJudge
@@ -97,7 +97,7 @@ class DetectionService:
         )
         spans = self._merge_spans(spans)
         anonymized = strategy.apply(content, spans)
-        juge_statut, juge_type = self._metadonnees_juge(verdict_juge)
+        juge_statut, juge_type = metadonnees_juge(verdict_juge)
 
         await self._archive_repo.save(
             AuditEntry(
@@ -119,21 +119,6 @@ class DetectionService:
             detecteurs=detectors_ok,
             verdict_juge=verdict_juge,
         )
-
-    @staticmethod
-    def _metadonnees_juge(verdict: InjectionVerdict | None) -> tuple[str | None, str | None]:
-        """
-        Ce qui est journalisé du verdict : son statut et son type, jamais l'explication.
-
-        Seules des valeurs de listes fermées sont gardées : une valeur inattendue ne peut pas
-        faire entrer de texte libre (donc du contenu du document) dans l'historique.
-        """
-        if verdict is None:
-            return None, None
-        statut = verdict.status if verdict.status in JUDGE_STATUSES else "unavailable"
-        if statut != "detected":
-            return statut, None
-        return statut, verdict.injection_type if verdict.injection_type in INJECTION_TYPES else "other"
 
     async def _run_judge(self, content: str) -> InjectionVerdict | None:
         """
