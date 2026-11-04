@@ -32,7 +32,7 @@ COLONNES = [
 ]
 
 _STRATEGIES = {"masking": "Masquage", "pseudonymization": "Pseudonymisation"}
-_DETECTEURS = {"RegexDetector": "Regex", "LLMDetector": "LLM"}
+_DETECTEURS = {"RegexDetector": "Regex", "LLMDetector": "LLM", "SpacyDetector": "NER"}
 
 # Tranches du nombre de données détectées par document (borne haute incluse), dans l'ordre d'affichage
 _TRANCHES = [("0", 0), ("1 à 2", 2), ("3 à 5", 5), ("6 à 10", 10), ("Plus de 10", None)]
