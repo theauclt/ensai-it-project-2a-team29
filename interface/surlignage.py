@@ -33,7 +33,7 @@ _LIBELLES = {
     "PLAQUE_DIPLOMATIQUE": "Plaque",
 }
 
-_LIBELLES_DETECTEURS = {"RegexDetector": "Règles", "LLMDetector": "LLM"}
+_LIBELLES_DETECTEURS = {"RegexDetector": "Règles", "LLMDetector": "LLM", "SpacyDetector": "NER"}
 
 # Marqueur posé par la stratégie de masquage : [EMAIL_1], [NOM_2]...
 _MARQUEUR = re.compile(r"\[[A-Z][A-Z_]*_\d+\]")

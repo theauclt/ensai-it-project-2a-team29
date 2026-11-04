@@ -121,6 +121,24 @@ if resultat is not None:
             "Les noms, lieux et dates de naissance peuvent alors ne pas avoir été détectés."
         )
 
+    # ----- Juge d'injection LLM -----
+    juge = synthese["juge"]
+    if juge["detected"] or juge["not_detected"] or juge["unavailable"]:
+        st.subheader("Juge d'injection LLM")
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("Injections repérées", juge["detected"], help="Traitements où le juge a repéré une tentative de manipulation.")
+        col_b.metric(
+            "Rien repéré",
+            juge["not_detected"],
+            help="Le juge n'a rien repéré. Cela ne prouve pas que les documents sont sûrs : un document peut tromper le juge.",
+        )
+        col_c.metric("Juge indisponible", juge["unavailable"], help="Le juge n'a pas pu répondre. Le caviardage n'est pas affecté.")
+        if juge["detected"]:
+            st.warning(
+                f"{juge['detected']} traitement(s) ont été signalés par le juge comme des tentatives de manipulation. "
+                "Consultez l'historique (colonne « Juge LLM »)."
+            )
+
     # ----- Activité -----
     if len(synthese["par_jour"]) > 1:
         st.subheader("Activité par jour")

@@ -4,6 +4,7 @@ import logging
 import httpx
 
 from ..service.business_objects.injection_verdict import InjectionVerdict
+from ..service.interfaces.injection_judge import InjectionJudge
 
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ USER_TEMPLATE = (
 )
 
 
-class LLMInjectionJudge:
+class LLMInjectionJudge(InjectionJudge):
     """Analyse un document pour détecter les injections de prompt."""
 
     def __init__(
@@ -108,6 +109,13 @@ class LLMInjectionJudge:
     ):
         self.client = client
         self.model = model
+
+    async def aclose(self) -> None:
+        """
+        Ferme le client HTTP. Il est partagé avec LLMDetector : le fermer deux fois est
+        sans danger (httpx l'accepte), chacun peut donc le faire à l'arrêt.
+        """
+        await self.client.aclose()
 
     async def analyze(self, content: str) -> InjectionVerdict:
         """Analyse un document et renvoie le verdict du juge LLM."""
@@ -130,9 +138,16 @@ class LLMInjectionJudge:
             IndexError,
             TypeError,
         ) as exc:
+            # Type d'erreur et code HTTP seulement, jamais le contenu du document
+            code = (
+                f" (HTTP {exc.response.status_code})"
+                if isinstance(exc, httpx.HTTPStatusError)
+                else ""
+            )
             logger.warning(
-                "Juge LLM indisponible : %s",
+                "Juge LLM indisponible : %s%s",
                 type(exc).__name__,
+                code,
             )
 
             return InjectionVerdict(

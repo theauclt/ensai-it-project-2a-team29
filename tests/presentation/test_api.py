@@ -14,9 +14,11 @@ from anonymia.presentation.routes import routers
 from anonymia.service.admin_service import AdminService
 from anonymia.service.authentification_service import AuthentificationService
 from anonymia.service.business_objects.audit_entry import AuditEntry
+from anonymia.service.business_objects.injection_verdict import InjectionVerdict
 from anonymia.service.business_objects.user import User
 from anonymia.service.detection_service import DetectionService
 from anonymia.service.history_service import HistoryService
+from anonymia.service.interfaces.injection_judge import InjectionJudge
 from anonymia.service.prompt_injector_detector import PromptInjectionDetector
 from tests.fakes import FakeArchiveRepository, FakeUserRepository
 
@@ -322,7 +324,7 @@ def test_les_journaux_ne_contiennent_jamais_le_contenu(client, archive):
     assert set(response.json()[0]) == {
         "id", "user_id", "date_traitement", "hash_document",
         "strategie_anonymisation", "detecteurs_contributeurs", "nb_pii_detectees",
-        "injection_suspectee", "types_pii",
+        "injection_suspectee", "types_pii", "juge_statut", "juge_type",
     }
 
 
@@ -499,3 +501,92 @@ def test_confirmation_requise_donne_les_types_d_injection(client):
     assert corps["confirmation_requise"] is True
     assert corps["types_injection"]
     assert corps["mode_degrade"] is False  # aucun détecteur n'a tourné
+
+
+# ---------------------------------------------------------------------------
+# Juge d'injection LLM (FO3) : verdict exposé, jamais l'explication
+# ---------------------------------------------------------------------------
+
+
+class JugeFixe(InjectionJudge):
+    def __init__(self, verdict):
+        self.verdict = verdict
+
+    async def analyze(self, content):
+        return self.verdict
+
+
+class JugeEnPanne(InjectionJudge):
+    async def analyze(self, content):
+        raise RuntimeError("juge en panne")
+
+
+def client_avec_juge(archive, juge):
+    users = FakeUserRepository([make_user(1, "alice", "USER"), make_user(2, "sup", "SUPERVISOR")])
+    app = FastAPI()
+    for router in routers:
+        app.include_router(router)
+    app.state.detection_service = DetectionService(
+        [RegexDetector()], AnonymizationStrategyFactory(), archive, PromptInjectionDetector(), juge
+    )
+    app.state.history_service = HistoryService(archive, users)
+    app.state.auth_service = AuthentificationService(users)
+    return TestClient(app)
+
+
+def caviarder(client, login="alice", contenu=DOCUMENT):
+    return client.post("/documents/caviarder", json={"contenu": contenu}, headers=en_tete(client, login)).json()
+
+
+def test_sans_juge_la_reponse_n_a_pas_de_verdict(client):
+    assert caviarder(client)["juge"] is None
+
+
+def test_injection_reperee_par_le_juge_alerte_sans_bloquer(archive):
+    verdict = InjectionVerdict(status="detected", injection_type="role_manipulation", explication="jean@mail.fr")
+    client = client_avec_juge(archive, JugeFixe(verdict))
+
+    corps = caviarder(client)
+
+    assert corps["juge"] == {"statut": "detected", "type": "role_manipulation"}
+    assert corps["document_caviarde"] is not None  # le juge n'a rien bloqué
+    assert any("juge LLM" in a for a in corps["avertissements"])
+    assert "jean@mail.fr" not in str(corps["juge"]) and "explication" not in str(corps)
+
+
+def test_juge_indisponible_est_distingue_sans_alerte_d_injection(archive):
+    client = client_avec_juge(archive, JugeEnPanne())
+
+    corps = caviarder(client)
+
+    assert corps["juge"] == {"statut": "unavailable", "type": None}
+    assert corps["document_caviarde"] is not None
+    assert not any("juge LLM" in a for a in corps["avertissements"])
+
+
+def test_rien_repere_par_le_juge(archive):
+    client = client_avec_juge(archive, JugeFixe(InjectionVerdict(status="not_detected", explication="ok")))
+
+    corps = caviarder(client)
+
+    assert corps["juge"] == {"statut": "not_detected", "type": None}
+    assert corps["avertissements"] == []
+
+
+def test_les_journaux_donnent_le_verdict_du_juge(archive):
+    verdict = InjectionVerdict(status="detected", injection_type="prompt_extraction", explication="x")
+    client = client_avec_juge(archive, JugeFixe(verdict))
+    caviarder(client)
+
+    (entree,) = client.get("/journaux", headers=en_tete(client, "sup")).json()
+
+    assert (entree["juge_statut"], entree["juge_type"]) == ("detected", "prompt_extraction")
+
+
+def test_les_journaux_sans_juge_ont_un_verdict_vide(client):
+    caviarder(client)
+
+    (entree,) = client.get("/journaux", headers=en_tete(client, "sup")).json()
+
+    assert (entree["juge_statut"], entree["juge_type"]) == (None, None)
+

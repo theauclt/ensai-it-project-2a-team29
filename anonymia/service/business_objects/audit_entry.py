@@ -20,6 +20,8 @@ class AuditEntry:
         nb_pii_detectees: int,
         injection_suspectee: bool = False,
         types_pii: str = "",
+        juge_statut: str | None = None,
+        juge_type: str | None = None,
         id: int | None = None,
     ) -> None:
         self.id = id
@@ -32,3 +34,8 @@ class AuditEntry:
         self.injection_suspectee = injection_suspectee
         # Décompte par type, « EMAIL:2,NOM:1 » : jamais le texte des PII (voir types_pii.py)
         self.types_pii = types_pii
+        # Verdict du juge d'injection LLM (FO3) : statut (detected, not_detected, unavailable) et
+        # type d'injection, valeurs de listes fermées. None = pas de juge pour ce traitement.
+        # L'explication libre du juge n'est jamais conservée : elle pourrait recopier du contenu.
+        self.juge_statut = juge_statut
+        self.juge_type = juge_type
