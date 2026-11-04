@@ -18,6 +18,9 @@ COLONNES = ["Date", "Utilisateur", "Stratégie", "Détecteurs", "Données détec
 _STRATEGIES = {"masking": "Masquage", "pseudonymization": "Pseudonymisation"}
 _DETECTEURS = {"RegexDetector": "Regex", "LLMDetector": "LLM"}
 
+# Tranches du nombre de données détectées par document (borne haute incluse), dans l'ordre d'affichage
+_TRANCHES = [("0", 0), ("1 à 2", 2), ("3 à 5", 5), ("6 à 10", 10), ("Plus de 10", None)]
+
 
 def fuseau(nom: str | None) -> tzinfo:
     """
@@ -106,6 +109,14 @@ def statistiques(traitements: list[dict], tz: tzinfo) -> dict:
     }
 
 
+def _tranche(nb_pii: int) -> str:
+    """Nom de la tranche (« 0 », « 1 à 2 »...) dans laquelle tombe un nombre de données détectées."""
+    for nom, borne in _TRANCHES:
+        if borne is None or nb_pii <= borne:
+            return nom
+    return _TRANCHES[-1][0]
+
+
 def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo) -> dict:
     """
     Agrégats de la page Tableau de bord, calculés sur les traitements renvoyés par l'API.
@@ -118,12 +129,25 @@ def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo)
     total = base["traitements"]
 
     par_utilisateur: dict[str, int] = {}
+    detail_utilisateur: dict[str, dict] = {}
     par_strategie: dict[str, int] = {}
     par_detecteurs: dict[str, int] = {}
+    par_tranche = {nom: 0 for nom, _ in _TRANCHES}
     sans_llm = 0
+    pii_max = 0
     for t in traitements:
         nom = logins.get(t["user_id"]) or f"n°{t['user_id']}"
         par_utilisateur[nom] = par_utilisateur.get(nom, 0) + 1
+
+        nb_pii = t["nb_pii_detectees"]
+        pii_max = max(pii_max, nb_pii)
+        par_tranche[_tranche(nb_pii)] += 1
+        ligne = detail_utilisateur.setdefault(nom, {"traitements": 0, "pii": 0, "dernier": None})
+        ligne["traitements"] += 1
+        ligne["pii"] += nb_pii
+        date = _date_locale(t["date_traitement"], tz)
+        if ligne["dernier"] is None or date > ligne["dernier"]:
+            ligne["dernier"] = date
 
         strategie = _STRATEGIES.get(t["strategie_anonymisation"], t["strategie_anonymisation"])
         par_strategie[strategie] = par_strategie.get(strategie, 0) + 1
@@ -137,11 +161,26 @@ def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo)
     def trier(repartition: dict[str, int]) -> dict[str, int]:
         return dict(sorted(repartition.items(), key=lambda element: (-element[1], element[0])))
 
+    detail = [
+        {
+            "Utilisateur": nom,
+            "Traitements": d["traitements"],
+            "Données détectées": d["pii"],
+            "Moyenne par document": round(d["pii"] / d["traitements"], 1),
+            "Dernier traitement": d["dernier"],
+        }
+        for nom, d in detail_utilisateur.items()
+    ]
+    detail.sort(key=lambda ligne: (-ligne["Traitements"], ligne["Utilisateur"]))
+
     return {
         "traitements": total,
         "pii": base["pii"],
         "utilisateurs": base["utilisateurs"],
         "pii_moyenne": round(base["pii"] / total, 1) if total else 0.0,
+        "pii_max": pii_max,
+        "par_tranche": par_tranche,
+        "detail_utilisateurs": detail,
         "sans_llm": sans_llm,
         "part_sans_llm": round(100 * sans_llm / total) if total else 0,
         "par_jour": base["par_jour"],

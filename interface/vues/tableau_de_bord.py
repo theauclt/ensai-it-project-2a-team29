@@ -6,6 +6,7 @@ Historique (GET /journaux) : uniquement des métadonnées, jamais le texte des d
 """
 from datetime import date
 
+import graphiques
 import journal
 import session
 import streamlit as st
@@ -62,17 +63,6 @@ def _charger(login: str, debut: date | None, fin: date | None) -> None:
     }
 
 
-def _graphique(titre: str, repartition: dict[str, int], colonne: str) -> None:
-    """Diagramme en barres d'une répartition {libellé: nombre}."""
-    st.subheader(titre)
-    st.bar_chart(
-        [{colonne: nom, "Traitements": n} for nom, n in repartition.items()],
-        x=colonne,
-        y="Traitements",
-        height=240,
-    )
-
-
 # Dans un formulaire, l'API n'est interrogée qu'au clic sur « Afficher »
 with st.form("filtres_tableau_de_bord"):
     col_login, col_debut, col_fin = st.columns(3)
@@ -98,34 +88,86 @@ if resultat is not None:
 
     synthese = journal.tableau_de_bord(traitements, resultat["logins"], tz)
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Traitements", synthese["traitements"])
-    col2.metric("Données détectées", synthese["pii"])
-    col3.metric("Moyenne par document", synthese["pii_moyenne"])
-    col4.metric("Utilisateurs actifs", synthese["utilisateurs"])
+    # ----- Chiffres clés -----
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Traitements", synthese["traitements"], help="Nombre de documents caviardés sur la période.")
+    col2.metric(
+        "Données détectées",
+        synthese["pii"],
+        help="Total des données personnelles trouvées (noms, e-mails, téléphones...) dans tous les documents.",
+    )
+    col3.metric(
+        "Moyenne par document",
+        synthese["pii_moyenne"],
+        help="Données détectées ÷ traitements. Exemple : 28 données dans 7 documents = 4,0 par document. "
+        "Elle indique à quel point les documents traités sont riches en données personnelles.",
+    )
+    col4.metric(
+        "Maximum sur un document",
+        synthese["pii_max"],
+        help="Le plus grand nombre de données détectées dans un seul document.",
+    )
+    col5.metric(
+        "Utilisateurs actifs",
+        synthese["utilisateurs"],
+        help="Nombre de comptes ayant fait au moins un traitement sur la période.",
+    )
 
     if synthese["sans_llm"]:
         st.warning(
             f"{synthese['sans_llm']} traitement(s) sur {synthese['traitements']} "
             f"({synthese['part_sans_llm']} %) ont été faits sans le LLM, avec les expressions "
-            "régulières seules : service LLM indisponible, ou application lancée avec LLM_ENABLED=false."
+            "régulières seules : service LLM indisponible, ou application lancée avec LLM_ENABLED=false. "
+            "Les noms, lieux et dates de naissance peuvent alors ne pas avoir été détectés."
         )
 
+    # ----- Activité -----
     if len(synthese["par_jour"]) > 1:
         st.subheader("Activité par jour")
-        st.bar_chart(
-            [{"Jour": jour, "Traitements": n} for jour, n in synthese["par_jour"].items()],
-            x="Jour",
-            y="Traitements",
-            height=240,
+        jours = {date.fromisoformat(jour).strftime("%d/%m"): n for jour, n in synthese["par_jour"].items()}
+        st.altair_chart(graphiques.barres_verticales(jours, "Jour"), use_container_width=True)
+
+    gauche, droite = st.columns(2)
+    with gauche:
+        st.subheader("Par utilisateur")
+        st.altair_chart(graphiques.barres_horizontales(synthese["par_utilisateur"], "Utilisateur"), use_container_width=True)
+    with droite:
+        st.subheader("Données détectées par document")
+        st.caption("Combien de documents contiennent peu ou beaucoup de données personnelles.")
+        st.altair_chart(
+            graphiques.barres_verticales(synthese["par_tranche"], "Données par document", graphiques.COULEUR_ALERTE),
+            use_container_width=True,
         )
 
     gauche, droite = st.columns(2)
     with gauche:
-        _graphique("Par utilisateur", synthese["par_utilisateur"], "Utilisateur")
-        _graphique("Par stratégie", synthese["par_strategie"], "Stratégie")
+        st.subheader("Stratégie choisie")
+        st.altair_chart(graphiques.anneau(synthese["par_strategie"], "Stratégie"), use_container_width=True)
     with droite:
-        _graphique("Par détecteurs", synthese["par_detecteurs"], "Détecteurs")
+        st.subheader("Détecteurs utilisés")
+        st.altair_chart(graphiques.anneau(synthese["par_detecteurs"], "Détecteurs"), use_container_width=True)
+
+    # ----- Détail -----
+    st.subheader("Détail par utilisateur")
+    st.dataframe(
+        synthese["detail_utilisateurs"],
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Dernier traitement": st.column_config.DatetimeColumn("Dernier traitement", format="DD/MM/YYYY HH:mm"),
+        },
+    )
+
+    with st.expander("Comment lire ces chiffres ?"):
+        st.markdown(
+            "- **Moyenne par document** : données détectées ÷ traitements. Une moyenne de 4,0 signifie qu'un "
+            "document contient en général 4 données personnelles.\n"
+            "- **Données détectées par document** : répartition des documents selon le nombre de données "
+            "trouvées. Une moyenne seule peut cacher un seul document très chargé : ce graphique le montre.\n"
+            "- **Détecteurs** : « Regex + LLM » est le fonctionnement normal ; « Regex seul » signale un "
+            "traitement sans le LLM.\n"
+            "- Ces chiffres viennent de l'historique : ils ne contiennent jamais le texte des documents."
+        )
 
     notes = [f"Jours comptés dans le fuseau {getattr(tz, 'key', 'UTC')}."]
     if not resultat["logins"]:
