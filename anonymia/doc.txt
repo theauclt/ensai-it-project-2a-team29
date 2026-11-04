@@ -88,6 +88,10 @@ Creer les tables :
 
     python -m anonymia.data.init_db
 
+A RELANCER apres chaque "git pull" : quand l'equipe ajoute une colonne a la
+base (injection_suspectee, types_pii...), cette commande l'ajoute a vos tables
+existantes, sans rien supprimer. Sans cela, l'API repond 500 (voir partie 10).
+
 Le compte administrateur est cree automatiquement au demarrage de l'API si
 ADMIN_LOGIN et ADMIN_PASSWORD sont dans .env (partie 3). Sans ces variables,
 le creer a la main :
@@ -246,7 +250,9 @@ F. Document sans donnee personnelle
 G. Historique, avec un compte SUPERVISOR ou ADMIN
    GET /journaux
    Attendu : les traitements precedents, du plus recent au plus ancien, avec
-   hash_document, strategie, nombre de PII. JAMAIS le texte des documents.
+   hash_document, strategie, nombre de PII et types_pii (nombre par type, par
+   exemple {"EMAIL": 2, "TELEPHONE": 1}). JAMAIS le texte des documents.
+   Les traitements enregistres avant l'ajout des types ont types_pii = {}.
    Essayer aussi le filtre utilisateur=alice et date_debut=2026-01-01.
 
 H. Droits : se connecter avec le compte USER, puis GET /journaux
@@ -364,6 +370,32 @@ peut se tromper avec assurance.
 
 
 --------------------------------------------------------------------------------
+9 ter. TYPES DE PII DANS L'HISTORIQUE
+--------------------------------------------------------------------------------
+
+Pour chaque traitement (POST /documents/caviarder), l'historique enregistre le
+nombre de donnees detectees ET leur repartition par type. GET /journaux renvoie
+par exemple :
+
+    "nb_pii_detectees": 3,
+    "types_pii": {"EMAIL": 2, "TELEPHONE": 1}
+
+Ce qui est enregistre : uniquement le TYPE et le NOMBRE. Jamais le texte des
+donnees : savoir qu'il y avait 2 e-mails ne permet pas de les retrouver.
+
+En base : colonne "types_pii" (texte, par exemple "EMAIL:2,TELEPHONE:1") de la
+table traitements. Les traitements enregistres avant cet ajout ont une valeur
+vide, renvoyee par l'API comme {} et affichee "—" dans l'interface.
+
+Dans l'interface : la page Historique a une colonne "Types de donnees" (aussi dans
+l'export CSV), et le Tableau de bord un graphique "Donnees detectees par type".
+
+Types possibles : EMAIL, TELEPHONE, NIR, IBAN, PLAQUE_ACTUELLE, PLAQUE_ANCIENNE,
+PLAQUE_DIPLOMATIQUE (expressions regulieres) ; NOM, PRENOM, LIEU, ORGANISATION,
+ADRESSE, DATE_NAISSANCE, POSTE (LLM).
+
+
+--------------------------------------------------------------------------------
 10. PROBLEMES FREQUENTS
 --------------------------------------------------------------------------------
 
@@ -378,6 +410,12 @@ L'API ne demarre pas : "ADMIN_PASSWORD trop court"
 
 L'API ne demarre pas au premier lancement, erreur sur la table "users"
     -> Les tables n'existent pas : lancer init_db avant (partie 4).
+
+Caviardage ou historique : erreur 500, et dans le terminal d'uvicorn
+"psycopg2.errors.UndefinedColumn: column ... does not exist"
+    -> Votre base n'a pas une colonne ajoutee par l'equipe. Arreter l'API,
+       lancer "python -m anonymia.data.init_db" (sans danger, rien n'est
+       supprime), puis relancer l'API. A faire apres chaque "git pull".
 
 KeyError: 'POSTGRES_HOST' (ou autre variable POSTGRES_*)
     -> .env absent ou incomplet, ou commande lancee hors de la racine du depot.
@@ -415,8 +453,6 @@ Pas encore disponible :
   le compte). Hors du perimetre demande par le cahier des charges (F1)
 - revocation immediate des jetons (voir H2)
 - detail d'un traitement (/journaux/{id})
-- repartition des donnees detectees par type (nom, email, IBAN...) dans le
-  tableau de bord : l'historique n'enregistre que leur nombre
 - blocage des documents suspects : le pre-filtre contre l'injection de prompt
   (PromptInjectionDetector) detecte quelques formulations connues et les
   journalise, mais le traitement continue ; pas encore de tests adversariaux
@@ -514,13 +550,21 @@ Page "Tableau de bord"
    Graphiques :
    - Activite par jour (si la periode couvre plusieurs jours)
    - Par utilisateur : qui traite combien de documents, du plus actif au moins actif
-   - Par strategie : masquage ou pseudonymisation
-   - Par detecteurs : "Regex + LLM" ou "Regex seul"
+   - Donnees detectees par document : combien de documents contiennent 0, 1 a 2,
+     3 a 5, 6 a 10 ou plus de 10 donnees (une moyenne seule peut cacher un
+     document tres charge)
+   - Donnees detectees par type : combien d'e-mails, de noms, d'IBAN...
+     (les trois types de plaques sont regroupes sous "Plaque")
+   - Strategie choisie : masquage ou pseudonymisation
+   - Detecteurs utilises : "Regex + LLM" ou "Regex seul"
+   - Detail par utilisateur (tableau) : traitements, donnees detectees, moyenne
+     par document et dernier traitement
 
    Limites :
    - Un SUPERVISOR voit les utilisateurs par numero (n°2) et non par login :
      seul un ADMIN peut lire la liste des comptes.
-   - Pas de repartition par type de donnee (nom, email, IBAN...) : la base
-     n'enregistre que le nombre de donnees detectees par traitement.
+   - Le graphique par type ne compte que les traitements faits apres l'ajout
+     des types dans l'historique : les plus anciens n'ont que le nombre de
+     donnees. La page indique combien de traitements sont exclus.
    - Les jours sont comptes dans le fuseau du navigateur (Paris par defaut),
      mais les filtres "Du" et "Au" comptent des jours UTC.

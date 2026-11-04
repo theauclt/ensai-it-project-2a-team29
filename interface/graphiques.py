@@ -11,29 +11,33 @@ COULEUR_ALERTE = "#E45756"  # rouge, pour ce qui demande de l'attention
 PALETTE = ["#4C78A8", "#F58518", "#54A24B", "#B279A2", "#9D755D"]
 
 
-def _infobulle(colonne: str) -> list[alt.Tooltip]:
+def _infobulle(colonne: str, mesure: str = "Traitements") -> list[alt.Tooltip]:
     """Texte affiché au survol : catégorie, nombre et part du total."""
-    return [alt.Tooltip(f"{colonne}:N"), alt.Tooltip("Traitements:Q"), alt.Tooltip("Part:N")]
+    return [alt.Tooltip(f"{colonne}:N"), alt.Tooltip(f"{mesure}:Q"), alt.Tooltip("Part:N")]
 
 
-def _donnees(repartition: dict[str, int], colonne: str) -> list[dict]:
+def _donnees(repartition: dict[str, int], colonne: str, mesure: str = "Traitements") -> list[dict]:
     total = sum(repartition.values()) or 1
     return [
-        {colonne: nom, "Traitements": n, "Part": f"{round(100 * n / total)} %"}
+        {colonne: nom, mesure: n, "Part": f"{round(100 * n / total)} %"}
         for nom, n in repartition.items()
     ]
 
 
-def barres_horizontales(repartition: dict[str, int], colonne: str) -> alt.Chart:
-    """Barres horizontales triées de la plus grande à la plus petite, avec la valeur au bout."""
-    donnees = _donnees(repartition, colonne)
+def barres_horizontales(repartition: dict[str, int], colonne: str, mesure: str = "Traitements") -> alt.Chart:
+    """
+    Barres horizontales triées de la plus grande à la plus petite, avec la valeur au bout.
+
+    mesure : ce que comptent les barres (« Traitements » par défaut, « Données » pour les types).
+    """
+    donnees = _donnees(repartition, colonne, mesure)
     base = alt.Chart(alt.Data(values=donnees)).encode(
         y=alt.Y(f"{colonne}:N", sort=list(repartition), title=None, axis=alt.Axis(labelLimit=200)),
-        x=alt.X("Traitements:Q", title=None, axis=alt.Axis(tickMinStep=1, grid=True)),
-        tooltip=_infobulle(colonne),
+        x=alt.X(f"{mesure}:Q", title=None, axis=alt.Axis(tickMinStep=1, grid=True)),
+        tooltip=_infobulle(colonne, mesure),
     )
     barres = base.mark_bar(color=COULEUR, cornerRadiusEnd=4, size=22)
-    valeurs = base.mark_text(align="left", dx=5, color="gray").encode(text="Traitements:Q")
+    valeurs = base.mark_text(align="left", dx=5, color="gray").encode(text=f"{mesure}:Q")
     return (barres + valeurs).properties(height=max(110, 42 * len(donnees)))
 
 

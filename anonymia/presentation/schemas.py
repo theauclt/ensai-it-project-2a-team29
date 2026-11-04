@@ -38,6 +38,7 @@ class PIIResponse(BaseModel):
     debut: int
     fin: int
     detecteur: str
+    confiance: float = Field(ge=0, le=1, description="Fiabilité de la détection, de 0 à 1")
 
 
 class AnalyseResponse(BaseModel):
@@ -78,6 +79,7 @@ class TraitementResponse(BaseModel):
     strategie_anonymisation: str
     detecteurs_contributeurs: str
     nb_pii_detectees: int
+    types_pii: dict[str, int] = Field(default_factory=dict, description="Nombre de PII par type, ex. {'EMAIL': 2}")
     injection_suspectee: bool = False
 
 
@@ -109,3 +111,4 @@ class UtilisateurResponse(BaseModel):
     role: str
     est_active: bool
     date_creation: datetime | None = None
+

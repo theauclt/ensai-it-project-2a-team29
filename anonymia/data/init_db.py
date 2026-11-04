@@ -28,6 +28,7 @@ def init_db():
                 detecteurs_contributeurs VARCHAR(255) NOT NULL,
                 nb_pii_detectees INTEGER NOT NULL,
                 injection_suspectee BOOLEAN NOT NULL DEFAULT FALSE,
+                types_pii TEXT NOT NULL DEFAULT '',
 
                 CONSTRAINT fk_traitements_user
                     FOREIGN KEY (user_id)
@@ -38,6 +39,10 @@ def init_db():
         cursor.execute("""
             ALTER TABLE traitements
             ADD COLUMN IF NOT EXISTS injection_suspectee BOOLEAN NOT NULL DEFAULT FALSE;
+        """)
+        cursor.execute("""
+            ALTER TABLE traitements
+            ADD COLUMN IF NOT EXISTS types_pii TEXT NOT NULL DEFAULT '';
         """)
 
     connection.commit()
