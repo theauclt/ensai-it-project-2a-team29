@@ -138,9 +138,16 @@ class LLMInjectionJudge(InjectionJudge):
             IndexError,
             TypeError,
         ) as exc:
+            # Type d'erreur et code HTTP seulement, jamais le contenu du document
+            code = (
+                f" (HTTP {exc.response.status_code})"
+                if isinstance(exc, httpx.HTTPStatusError)
+                else ""
+            )
             logger.warning(
-                "Juge LLM indisponible : %s",
+                "Juge LLM indisponible : %s%s",
                 type(exc).__name__,
+                code,
             )
 
             return InjectionVerdict(

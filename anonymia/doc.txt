@@ -473,6 +473,8 @@ a motifs de F5 (documents reperes par les deux, par le juge seul, par le filtre 
 par aucun). Pour mesurer le filtre a motifs et la detection de PII sur les memes
 documents : python -m scripts.evaluer_corpus corpus-test --llm.
 
+Resultats mesures : voir la partie 9 quinquies.
+
 Ou le verdict est visible :
 
 - POST /documents/caviarder : champ "juge", par exemple
@@ -490,6 +492,70 @@ Ou le verdict est visible :
   "Injection : <type>", "Rien repere", "Indisponible" ou "—".
 - Interface, page Tableau de bord : section "Juge d'injection LLM" (injections
   reperees, rien repere, juge indisponible), si au moins un traitement a un verdict.
+
+
+--------------------------------------------------------------------------------
+9 quinquies. RESULTATS DE L'EVALUATION DU JUGE D'INJECTION (FO3)
+--------------------------------------------------------------------------------
+
+Mesure faite le 4 novembre 2026 avec scripts/evaluer_juge.py (commande en 9 quater),
+sur les 68 documents de corpus-test, avec le modele LLM du Datalab configure dans
+LLM_MODEL et le prompt du juge de cette version. Les documents d'attaque sont ceux
+marques test_adversarial = oui dans le manifeste.
+
+    Attaques detectees ............................... 17 / 17   (100 %)
+    Faux positifs sur les documents normaux .......... 0 / 51    (0 %)
+    Verdicts "unavailable" (juge sans reponse) ....... 0 / 68
+
+Par famille d'attaque : toutes detectees (breakout_balise 2/2, empoisonnement_schema
+2/2, injection_directe_fr 2/2, et 1/1 pour encodage_base64, fausse_autorite_systeme,
+faux_exemple_inline, injection_bloc_code, injection_conditionnelle,
+injection_directe_en, injection_multilingue, paraphrase_indirecte, re_role,
+surcharge_noyade, tentative_modification).
+
+Types d'injection renvoyes par le juge : ignore_instructions (16), role_manipulation
+(1).
+
+Comparaison avec le filtre a motifs de F5 (PromptInjectionDetector) sur les 17
+documents d'attaque :
+
+    Reperes par les deux ............................. 17
+    Reperes par le juge seul ......................... 0
+    Reperes par le filtre seul ....................... 0
+    Reperes par aucun des deux ....................... 0
+
+Comment lire ces resultats, et leurs limites :
+
+- Sur ce corpus, le juge n'apporte rien de mesurable en plus du filtre a motifs :
+  les deux repèrent les 17 attaques. L'interet du juge est de comprendre le contexte
+  (paraphrases, formulations inedites) et de ne pas s'alarmer devant un texte qui
+  parle simplement d'injections ; le corpus ne contient pas d'attaque que le filtre
+  rate, donc cet apport n'est pas mesure ici. Pour le mesurer, il faudrait des
+  attaques reformulees sans les mots du catalogue.
+- 100 % ne garantit pas la meme reussite sur des attaques inedites : le prompt du
+  juge contient des exemples proches de ceux du corpus, et le corpus a servi a
+  construire le filtre et le juge.
+- Le STATUT du verdict (detecte ou non) est fiable sur ce corpus ; le TYPE l'est
+  moins : 16 attaques sur 17 sont classees "ignore_instructions", y compris des
+  fermetures de balise ou du base64. Ne pas s'appuyer sur le type pour decider.
+- "Rien repere" ne prouve pas qu'un document est sur : le juge lit le document
+  qu'il doit juger, un document peut donc le tromper.
+- Une seule execution : un LLM n'est pas parfaitement deterministe, un nouveau
+  lancement peut donner un resultat legerement different.
+
+Ce qui n'est pas mesure par ce script : la detection des donnees personnelles sur
+ces memes documents (non-regression de F5). Pour la mesurer :
+
+    python -m scripts.evaluer_corpus corpus-test --llm
+
+Cas de panne verifies (partie 7, scenario L) : un juge en panne (modele inexistant)
+ne bloque ni le caviardage ni l'archivage, et donne le statut "unavailable".
+
+Piege rencontre : si LLM_JUDGE_MODEL est reste a une valeur fausse dans .env, tous
+les verdicts sont "unavailable" ; le rapport affiche alors "Evaluation inexploitable".
+Les messages "Juge LLM indisponible (HTTP <code>)" donnent la cause : 400 ou 404 =
+nom de modele faux, 401 ou 403 = cle refusee, 429 = trop d'appels (baisser
+--concurrence).
 
 
 --------------------------------------------------------------------------------
@@ -554,9 +620,9 @@ Pas encore disponible :
   (PromptInjectionDetector) detecte quelques formulations connues et les
   journalise, mais le traitement continue ; pas encore de tests adversariaux
 
-Juge d'injection LLM (FO3) : voir la partie 9 quater. Sa qualite se mesure avec
-scripts/evaluer_juge.py sur les 17 documents adversariaux du corpus de test ; les
-resultats de la derniere execution sont a reporter dans le rapport.
+Juge d'injection LLM (FO3) : voir la partie 9 quater. Ses resultats sur le corpus
+de test sont dans la partie 9 quinquies ; ils ne garantissent pas la meme reussite
+sur des attaques inedites.
 
 Comportements a connaitre :
 - la confiance des PII du LLM est celle qu'il s'attribue lui-meme (voir 9 bis) ;

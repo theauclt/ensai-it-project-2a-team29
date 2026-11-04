@@ -101,3 +101,16 @@ async def test_le_corpus_reel_se_lit_en_entier():
     assert r["attaques"]["total"] == 17
     assert r["normaux"]["total"] == 51
     assert r["attaques"]["detectees"] == 0
+
+
+async def test_le_rapport_signale_une_evaluation_inexploitable_si_le_juge_est_toujours_indisponible(tmp_path):
+    r = await evaluer_juge.evaluer(corpus_minimal(tmp_path), JugeScripte(indisponible=["a", "e", "i", "o", "u"]))
+
+    assert "Évaluation inexploitable" in evaluer_juge.rapport_markdown(r)
+
+
+async def test_le_rapport_normal_n_a_pas_cet_avertissement(tmp_path):
+    r = await evaluer_juge.evaluer(corpus_minimal(tmp_path), JugeScripte(detecte=["Ignore previous"]))
+
+    assert "inexploitable" not in evaluer_juge.rapport_markdown(r)
+

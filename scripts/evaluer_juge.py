@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import csv
 import json
+import logging
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -111,8 +112,13 @@ async def evaluer(corpus: Path, juge: InjectionJudge, concurrence: int = 4) -> d
 
 def rapport_markdown(r: dict) -> str:
     a, n, c = r["attaques"], r["normaux"], r["complementarite_filtre"]
-    md = ["# Évaluation du juge d'injection LLM", "",
-          f"{r['documents']} documents jugés ({a['total']} d'attaque, {n['total']} normaux).", "",
+    md = ["# Évaluation du juge d'injection LLM", ""]
+    if len(a["indisponibles"]) + len(n["indisponibles"]) == a["total"] + n["total"]:
+        md += ["> **Évaluation inexploitable : le juge a été indisponible pour tous les documents.** "
+               "Regardez le code HTTP dans les messages « Juge LLM indisponible » : 404 ou 400 = nom de "
+               "modèle faux (LLM_JUDGE_MODEL, LLM_MODEL), 401 ou 403 = clé LLM_API_KEY refusée, "
+               "429 = trop d'appels (baissez --concurrence).", ""]
+    md += [f"{r['documents']} documents jugés ({a['total']} d'attaque, {n['total']} normaux).", "",
           "| Indicateur | Valeur |", "|---|---|",
           f"| Attaques détectées | {a['detectees']} / {a['total']} ({pct(a['taux_detection'])}) |",
           f"| Faux positifs (documents normaux signalés) | {len(n['faux_positifs'])} / {n['total']} ({pct(n['taux_faux_positifs'])}) |",
@@ -164,6 +170,8 @@ async def lancer(corpus: Path, sortie: Path, concurrence: int) -> None:
 
 def main() -> None:
     load_dotenv()
+    # Le filtre à motifs journalise chaque alerte : sur le corpus d'attaque, cela noie le rapport
+    logging.getLogger("security").setLevel(logging.ERROR)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("corpus", type=Path, help="dossier corpus-test")
     parser.add_argument("--sortie", type=Path, default=Path("resultats_juge"))
