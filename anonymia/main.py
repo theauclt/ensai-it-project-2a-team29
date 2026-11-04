@@ -32,8 +32,9 @@ async def lifespan(app: FastAPI):
     user_repo = build_user_repository()
     # LLM_ENABLED=false : démarrage avec les expressions régulières seules
     with_llm = os.environ.get("LLM_ENABLED", "true").lower() != "false"
+    with_ner = os.environ.get("NER_ENABLED", "false").lower() == "true"
 
-    app.state.detection_service = build_detection_service(archive_repo, with_llm=with_llm)
+    app.state.detection_service = build_detection_service(archive_repo, with_llm=with_llm, with_ner=with_ner)
     app.state.history_service = build_history_service(archive_repo, user_repo)
     app.state.auth_service = build_auth_service(user_repo)
     app.state.admin_service = build_admin_service(user_repo)
