@@ -302,14 +302,16 @@ class LLMDetector(PIIDetector):
 
     @staticmethod
     def _locate_spans(
-        entities: list[tuple[str, str, float]],
+        entities: list[tuple[str, str] | tuple[str, str, float]],
         content: str
     ) -> list[PIISpan]:
         """Retrouve les positions et vérifie leur cohérence."""
 
         spans: list[PIISpan] = []
 
-        for text, pii_type, confidence in entities:
+        for text, pii_type, *reste in entities:
+            # (texte, type) reste accepté : la confiance vaut alors la valeur par défaut
+            confidence = reste[0] if reste else DEFAULT_CONFIDENCE
 
             pattern = re.compile(
                 r"(?<!\w)" + re.escape(text) + r"(?!\w)"
