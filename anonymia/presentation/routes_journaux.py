@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..service.business_objects.user import User
 from ..service.history_service import HistoryService
+from ..service.types_pii import depuis_texte
 from .providers import get_history_service
 from .schemas import TraitementResponse
 from .security import get_current_user
@@ -43,6 +44,7 @@ async def lister_traitements(
             strategie_anonymisation=e.strategie_anonymisation,
             detecteurs_contributeurs=e.detecteurs_contributeurs,
             nb_pii_detectees=e.nb_pii_detectees,
+            types_pii=depuis_texte(e.types_pii),
             injection_suspectee=e.injection_suspectee,
         )
         for e in entries

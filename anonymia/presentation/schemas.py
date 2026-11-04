@@ -71,6 +71,7 @@ class TraitementResponse(BaseModel):
     strategie_anonymisation: str
     detecteurs_contributeurs: str
     nb_pii_detectees: int
+    types_pii: dict[str, int] = Field(default_factory=dict, description="Nombre de PII par type, ex. {'EMAIL': 2}")
     injection_suspectee: bool = False
 
 

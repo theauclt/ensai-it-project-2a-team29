@@ -322,8 +322,22 @@ def test_les_journaux_ne_contiennent_jamais_le_contenu(client, archive):
     assert set(response.json()[0]) == {
         "id", "user_id", "date_traitement", "hash_document",
         "strategie_anonymisation", "detecteurs_contributeurs", "nb_pii_detectees",
-        "injection_suspectee",
+        "injection_suspectee", "types_pii",
     }
+
+
+def test_les_journaux_donnent_les_types_de_pii_sans_leur_contenu(client, archive):
+    headers = en_tete(client, "sup")
+    document = "Écrire à jean@mail.fr, marie@mail.fr ou au 06 12 34 56 78."
+    client.post("/documents/caviarder", json={"contenu": document}, headers=headers)
+
+    response = client.get("/journaux", headers=headers)
+
+    (entree,) = response.json()
+    assert entree["types_pii"] == {"EMAIL": 2, "TELEPHONE": 1}
+    assert entree["nb_pii_detectees"] == 3
+    assert "jean@mail.fr" not in response.text
+    assert "06 12" not in response.text
 
 
 def test_les_dates_sans_fuseau_de_la_base_sont_renvoyees_en_utc(client, archive):
@@ -334,6 +348,7 @@ def test_les_dates_sans_fuseau_de_la_base_sont_renvoyees_en_utc(client, archive)
     response = client.get("/journaux", headers=en_tete(client, "sup"))
 
     assert response.json()[0]["date_traitement"].endswith(("Z", "+00:00"))
+    assert response.json()[0]["types_pii"] == {}  # traitement ancien, sans types
 
 
 # ---------------------------------------------------------------------------

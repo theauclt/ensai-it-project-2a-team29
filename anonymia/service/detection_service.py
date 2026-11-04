@@ -11,6 +11,7 @@ from .business_objects.pii_span import PIISpan
 from .interfaces.archive_repository import ArchiveRepository
 from .interfaces.pii_detector import PIIDetector
 from .prompt_injector_detector import PromptInjectionDetector
+from .types_pii import compter, vers_texte
 
 # Import utilisé uniquement pour le typage : pas de dépendance à l'exécution
 # de service/ vers infrastructure/
@@ -87,6 +88,7 @@ class DetectionService:
                 detecteurs_contributeurs=",".join(detectors_ok),
                 nb_pii_detectees=len(spans),
                 injection_suspectee=bool(injection_types),
+                types_pii=vers_texte(compter(spans)),
             )
         )
         return AnonymizationResult(document=anonymized, types_injection=injection_types)

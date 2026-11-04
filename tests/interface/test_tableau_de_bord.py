@@ -98,3 +98,50 @@ def test_detail_par_utilisateur():
     assert detail[0]["Données détectées"] == 6
     assert detail[0]["Moyenne par document"] == 3.0
     assert detail[0]["Dernier traitement"].day == 12
+
+
+# ---------------------------------------------------------------------------
+# Types de données (F4)
+# ---------------------------------------------------------------------------
+
+
+def avec_types(types, nb=None, user_id=1):
+    t = traitement(user_id, 10, nb=sum(types.values()) if nb is None else nb)
+    t["types_pii"] = types
+    return t
+
+
+def test_libelle_types_lisible_et_trie():
+    assert journal.libelle_types({"NOM": 1, "EMAIL": 2}) == "2 E-mail · 1 Nom"
+    assert journal.libelle_types({}) == "—"
+    assert journal.libelle_types(None) == "—"
+
+
+def test_les_trois_types_de_plaques_s_additionnent():
+    assert journal.regrouper_types({"PLAQUE_ACTUELLE": 1, "PLAQUE_ANCIENNE": 2}) == {"Plaque": 3}
+
+
+def test_historique_et_csv_ont_la_colonne_des_types():
+    lignes = journal.lignes_tableau([avec_types({"EMAIL": 2})], {}, TZ, hash_complet=True)
+
+    assert lignes[0]["Types de données"] == "2 E-mail"
+    assert "Types de données" in journal.vers_csv(lignes).decode("utf-8-sig").splitlines()[0]
+
+
+def test_repartition_par_type_sur_tous_les_traitements():
+    traitements = [avec_types({"EMAIL": 2, "NOM": 1}), avec_types({"EMAIL": 1}), avec_types({"IBAN": 1})]
+
+    synthese = journal.tableau_de_bord(traitements, {}, TZ)
+
+    assert synthese["par_type"] == {"E-mail": 3, "IBAN": 1, "Nom": 1}
+    assert synthese["traitements_sans_types"] == 0
+
+
+def test_anciens_traitements_sans_types_sont_comptes_a_part():
+    ancien = traitement(1, 10, nb=4)  # enregistré avant l'ajout des types : pas de champ types_pii
+    vide = avec_types({}, nb=0)  # nouveau traitement sans aucune donnée : ce n'est pas un ancien
+
+    synthese = journal.tableau_de_bord([ancien, vide, avec_types({"NOM": 1})], {}, TZ)
+
+    assert synthese["par_type"] == {"Nom": 1}
+    assert synthese["traitements_sans_types"] == 1

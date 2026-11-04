@@ -17,9 +17,9 @@ class PostgresArchiveRepository(ArchiveRepository):
             INSERT INTO traitements (
                 user_id, date_traitement, hash_document,
                 strategie_anonymisation, detecteurs_contributeurs,
-                nb_pii_detectees, injection_suspectee
+                nb_pii_detectees, injection_suspectee, types_pii
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         with self.__connection.cursor() as cur:
             cur.execute(
@@ -32,6 +32,7 @@ class PostgresArchiveRepository(ArchiveRepository):
                     entry.detecteurs_contributeurs,
                     entry.nb_pii_detectees,
                     entry.injection_suspectee,
+                    entry.types_pii,
                 ),
             )
         self.__connection.commit()
@@ -64,5 +65,6 @@ class PostgresArchiveRepository(ArchiveRepository):
             strategie_anonymisation=row["strategie_anonymisation"],
             detecteurs_contributeurs=row["detecteurs_contributeurs"],
             nb_pii_detectees=row["nb_pii_detectees"],
-                        injection_suspectee=row["injection_suspectee"],
+            injection_suspectee=row["injection_suspectee"],
+            types_pii=row.get("types_pii") or "",
         )

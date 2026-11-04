@@ -244,3 +244,22 @@ async def test_analyze_renvoie_la_confiance_des_detecteurs(archive):
 
     assert {s.source_detector: s.confidence for s in spans} == {"RegexDetector": 1.0, "FakeLLM": 0.42}
 
+
+async def test_l_historique_enregistre_les_types_sans_le_contenu(archive):
+    service = make_service(archive)
+
+    await service.detect("Écrire à jean@mail.fr ou marie@mail.fr.", "masking", user_id=1)
+
+    (entree,) = archive.entries
+    assert entree.types_pii == "EMAIL:2"
+    assert entree.nb_pii_detectees == 2
+    assert "jean" not in entree.types_pii
+
+
+async def test_document_sans_pii_a_des_types_vides(archive):
+    service = make_service(archive)
+
+    await service.detect("Ceci est un document neutre.", "masking", user_id=1)
+
+    assert archive.entries[0].types_pii == ""
+
