@@ -11,6 +11,7 @@ from .infrastructure.anonymization_strategy_factory import AnonymizationStrategy
 from .infrastructure.llm_detector import LLMDetector
 from .infrastructure.llm_injection_judge import LLMInjectionJudge
 from .infrastructure.regex_detector import RegexDetector
+from .infrastructure.spacy_detector import MODELE_PAR_DEFAUT, SpacyDetector
 from .persistence.postgres_archive_repository import PostgresArchiveRepository
 from .persistence.postgres_user_repository import PostgresUserRepository
 from .service.admin_service import AdminService
@@ -60,6 +61,15 @@ def build_injection_judge(client: httpx.AsyncClient) -> LLMInjectionJudge:
     return LLMInjectionJudge(client=client, model=model)
 
 
+def build_spacy_detector() -> SpacyDetector:
+    """
+    Construit le détecteur NER local (spaCy). Variable d'environnement :
+      SPACY_MODEL : nom du modèle installé (fr_core_news_lg par défaut)
+    Lève SpacyModeleIntrouvableError si le modèle n'est pas installé.
+    """
+    return SpacyDetector.charger(os.environ.get("SPACY_MODEL", MODELE_PAR_DEFAUT))
+
+
 def build_archive_repository() -> ArchiveRepository:
     """Dépôt de l'historique des traitements (PostgreSQL)."""
     return PostgresArchiveRepository()
@@ -71,7 +81,7 @@ def build_user_repository() -> UserRepository:
 
 
 def build_detection_service(
-    archive_repo: ArchiveRepository, with_llm: bool = True
+    archive_repo: ArchiveRepository, with_llm: bool = True, with_ner: bool = False
 ) -> DetectionService:
     """
     Assemble le service. Mode dégradé = retirer le détecteur LLM de la liste.
@@ -86,6 +96,8 @@ def build_detection_service(
         detectors.append(build_llm_detector(client))
         if os.environ.get("LLM_JUDGE_ENABLED", "true").lower() != "false":
             judge = build_injection_judge(client)
+    if with_ner:
+        detectors.append(build_spacy_detector())
     return DetectionService(
         detectors=detectors,
         strategy_factory=AnonymizationStrategyFactory(),
