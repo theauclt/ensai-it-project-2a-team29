@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
 
 
 InjectionType = Literal[
@@ -15,6 +15,11 @@ JudgeStatus = Literal[
     "not_detected",
     "unavailable",
 ]
+
+
+# Valeurs autorisées, pour ne journaliser que des valeurs de ces listes fermées
+JUDGE_STATUSES = frozenset(get_args(JudgeStatus))
+INJECTION_TYPES = frozenset(get_args(InjectionType))
 
 
 @dataclass(frozen=True)

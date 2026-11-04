@@ -68,6 +68,15 @@ Ouvrez .env et renseignez :
 
     LLM_ENABLED=false
         -> pour un premier test avec les expressions regulieres seules.
+
+    LLM_JUDGE_ENABLED, LLM_JUDGE_MODEL
+        -> juge d'injection LLM (facultatif, actif par defaut quand le LLM l'est).
+           Un second appel au LLM, en parallele de la detection, dit si le
+           document tente de manipuler le systeme. Il ne bloque jamais le
+           traitement. LLM_JUDGE_ENABLED=false le desactive (il double les appels
+           au LLM) ; LLM_JUDGE_MODEL choisit un autre modele (par defaut LLM_MODEL).
+           Il partage la connexion HTTP du detecteur de PII. Sans le LLM
+           (LLM_ENABLED=false), il n'y a pas de juge non plus.
     
     Pour utiliser LLM 
         -> se connecter sur https://llm.lab.sspcloud.fr/
@@ -396,6 +405,43 @@ ADRESSE, DATE_NAISSANCE, POSTE (LLM).
 
 
 --------------------------------------------------------------------------------
+9 quater. VERDICT DU JUGE D'INJECTION DANS L'HISTORIQUE (FO3)
+--------------------------------------------------------------------------------
+
+A chaque caviardage, si le juge d'injection LLM est actif (partie 3), son verdict
+est enregistre dans deux colonnes de la table traitements :
+
+    juge_statut   detected      le juge a repere une tentative de manipulation
+                  not_detected  le juge n'a rien repere
+                  unavailable   le juge n'a pas pu repondre (LLM en panne, reponse
+                                invalide...) : ce n'est PAS un "non detecte"
+                  vide (NULL)   pas de juge pour ce traitement (LLM ou juge
+                                desactive, ou traitement anterieur a FO3)
+    juge_type     si detected : ignore_instructions, role_manipulation,
+                  prompt_extraction, data_exfiltration ou other ; sinon vide
+
+Ce qui n'est JAMAIS enregistre : l'explication ecrite par le juge. C'est du texte
+libre produit par un LLM : il pourrait recopier des morceaux du document, alors
+que l'historique ne contient que des metadonnees. Seules des valeurs des listes
+ci-dessus sont gardees ; toute autre valeur est remplacee par "unavailable" (statut)
+ou "other" (type).
+
+Le traitement est archive meme si le juge echoue : le statut est alors
+"unavailable". En revanche, si l'ARCHIVAGE lui-meme echoue, le caviardage echoue
+aussi (pas de traitement sans trace), comme avant.
+
+Differences avec le filtre a motifs (F5), colonne injection_suspectee : le filtre
+BLOQUE le document jusqu'a confirmation de l'utilisateur ; le juge ne bloque
+jamais. Les deux colonnes sont independantes.
+
+Le verdict d'un juge peut etre manipule par le document qu'il lit : "not_detected"
+ne prouve pas l'absence d'injection. Il informe, il ne rassure pas.
+
+Apres un "git pull", relancer python -m anonymia.data.init_db pour ajouter les
+colonnes (partie 4).
+
+
+--------------------------------------------------------------------------------
 10. PROBLEMES FREQUENTS
 --------------------------------------------------------------------------------
 
@@ -456,6 +502,10 @@ Pas encore disponible :
 - blocage des documents suspects : le pre-filtre contre l'injection de prompt
   (PromptInjectionDetector) detecte quelques formulations connues et les
   journalise, mais le traitement continue ; pas encore de tests adversariaux
+
+Juge d'injection LLM (FO3), en cours : il est branche dans le caviardage et son
+verdict est enregistre dans l'historique (voir 9 quater), mais il n'est pas encore
+renvoye par l'API ni affiche dans l'interface.
 
 Comportements a connaitre :
 - la confiance des PII du LLM est celle qu'il s'attribue lui-meme (voir 9 bis) ;
