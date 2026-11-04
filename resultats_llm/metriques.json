@@ -1,0 +1,466 @@
+{
+  "pipeline": "regex + LLM",
+  "documents": 68,
+  "global": {
+    "tp": 246,
+    "fp": 11,
+    "fn": 8,
+    "precision": 0.9571984435797666,
+    "rappel": 0.968503937007874,
+    "f1": 0.9628180039138944
+  },
+  "global_strict": {
+    "tp": 205,
+    "fp": 11,
+    "fn": 49,
+    "precision": 0.9490740740740741,
+    "rappel": 0.8070866141732284,
+    "f1": 0.8723404255319148
+  },
+  "par_type": {
+    "ADDRESS_FULL": {
+      "tp": 27,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0,
+      "tp_strict": 27
+    },
+    "DATE_OF_BIRTH": {
+      "tp": 11,
+      "fp": 1,
+      "fn": 0,
+      "precision": 0.9166666666666666,
+      "rappel": 1.0,
+      "f1": 0.9565217391304348,
+      "tp_strict": 11
+    },
+    "EMAIL": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0,
+      "tp_strict": 12
+    },
+    "IBAN": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0,
+      "tp_strict": 4
+    },
+    "JOB_TITLE": {
+      "tp": 13,
+      "fp": 1,
+      "fn": 5,
+      "precision": 0.9285714285714286,
+      "rappel": 0.7222222222222222,
+      "f1": 0.8125000000000001,
+      "tp_strict": 13
+    },
+    "LICENSE_PLATE": {
+      "tp": 4,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0,
+      "tp_strict": 4
+    },
+    "LOCATION": {
+      "tp": 21,
+      "fp": 1,
+      "fn": 2,
+      "precision": 0.9545454545454546,
+      "rappel": 0.9130434782608695,
+      "f1": 0.9333333333333332,
+      "tp_strict": 21
+    },
+    "NIR": {
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0,
+      "tp_strict": 5
+    },
+    "ORG": {
+      "tp": 36,
+      "fp": 5,
+      "fn": 0,
+      "precision": 0.8780487804878049,
+      "rappel": 1.0,
+      "f1": 0.9350649350649352,
+      "tp_strict": 21
+    },
+    "PERSON": {
+      "tp": 86,
+      "fp": 3,
+      "fn": 1,
+      "precision": 0.9662921348314607,
+      "rappel": 0.9885057471264368,
+      "f1": 0.9772727272727273,
+      "tp_strict": 60
+    },
+    "PHONE": {
+      "tp": 27,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0,
+      "tp_strict": 27
+    }
+  },
+  "par_cercle": {
+    "1": {
+      "trouves": 161,
+      "total": 162,
+      "rappel": 0.9938271604938271
+    },
+    "2": {
+      "trouves": 72,
+      "total": 74,
+      "rappel": 0.972972972972973
+    },
+    "3": {
+      "trouves": 13,
+      "total": 18,
+      "rappel": 0.7222222222222222
+    }
+  },
+  "par_longueur": {
+    "court": {
+      "tp": 33,
+      "fp": 5,
+      "fn": 3,
+      "precision": 0.868421052631579,
+      "rappel": 0.9166666666666666,
+      "f1": 0.8918918918918918
+    },
+    "long": {
+      "tp": 44,
+      "fp": 4,
+      "fn": 0,
+      "precision": 0.9166666666666666,
+      "rappel": 1.0,
+      "f1": 0.9565217391304348
+    },
+    "moyen": {
+      "tp": 148,
+      "fp": 1,
+      "fn": 4,
+      "precision": 0.9932885906040269,
+      "rappel": 0.9736842105263158,
+      "f1": 0.9833887043189369
+    },
+    "tres_long": {
+      "tp": 21,
+      "fp": 1,
+      "fn": 1,
+      "precision": 0.9545454545454546,
+      "rappel": 0.9545454545454546,
+      "f1": 0.9545454545454546
+    }
+  },
+  "par_type_document": {
+    "adversarial": {
+      "tp": 45,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.9574468085106383,
+      "rappel": 1.0,
+      "f1": 0.9782608695652174
+    },
+    "attestation": {
+      "tp": 21,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    },
+    "cas_limite_cercle3": {
+      "tp": 0,
+      "fp": 3,
+      "fn": 2,
+      "precision": 0.0,
+      "rappel": 0.0,
+      "f1": 0.0
+    },
+    "compte_rendu_reunion": {
+      "tp": 16,
+      "fp": 1,
+      "fn": 1,
+      "precision": 0.9411764705882353,
+      "rappel": 0.9411764705882353,
+      "f1": 0.9411764705882353
+    },
+    "convocation": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "rappel": 0.9,
+      "f1": 0.9473684210526316
+    },
+    "courrier_administratif": {
+      "tp": 33,
+      "fp": 1,
+      "fn": 0,
+      "precision": 0.9705882352941176,
+      "rappel": 1.0,
+      "f1": 0.9850746268656716
+    },
+    "declaration_sinistre": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    },
+    "demande_etat_civil": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    },
+    "demande_logement": {
+      "tp": 8,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    },
+    "demande_titre": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    },
+    "email_interne": {
+      "tp": 12,
+      "fp": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "rappel": 0.9230769230769231,
+      "f1": 0.9600000000000001
+    },
+    "facture": {
+      "tp": 11,
+      "fp": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "rappel": 0.9166666666666666,
+      "f1": 0.9565217391304348
+    },
+    "fiche_liaison": {
+      "tp": 8,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.8,
+      "rappel": 1.0,
+      "f1": 0.888888888888889
+    },
+    "mandat_prelevement": {
+      "tp": 7,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    },
+    "note_courte": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "rappel": 0.9,
+      "f1": 0.9473684210526316
+    },
+    "rapport_long": {
+      "tp": 18,
+      "fp": 1,
+      "fn": 0,
+      "precision": 0.9473684210526315,
+      "rappel": 1.0,
+      "f1": 0.972972972972973
+    },
+    "rapport_tres_long": {
+      "tp": 20,
+      "fp": 1,
+      "fn": 1,
+      "precision": 0.9523809523809523,
+      "rappel": 0.9523809523809523,
+      "f1": 0.9523809523809523
+    },
+    "sans_pii": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "rappel": null,
+      "f1": null
+    },
+    "signalement": {
+      "tp": 8,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "rappel": 1.0,
+      "f1": 1.0
+    }
+  },
+  "documents_sans_pii": {
+    "docs": 13,
+    "docs_avec_fp": 0,
+    "fp": 0
+  },
+  "faux_positifs_imbriques_ignores": 0,
+  "documents_en_panne": 0,
+  "filtre_injection": {
+    "documents_attaque": 17,
+    "detectes": 1,
+    "taux_detection": 0.058823529411764705,
+    "documents_normaux": 51,
+    "faux_positifs": 0,
+    "taux_faux_positifs": 0.0,
+    "par_type_attaque": {
+      "breakout_balise": {
+        "detectes": 0,
+        "total": 2
+      },
+      "empoisonnement_schema": {
+        "detectes": 0,
+        "total": 2
+      },
+      "encodage_base64": {
+        "detectes": 0,
+        "total": 1
+      },
+      "fausse_autorite_systeme": {
+        "detectes": 0,
+        "total": 1
+      },
+      "faux_exemple_inline": {
+        "detectes": 0,
+        "total": 1
+      },
+      "injection_bloc_code": {
+        "detectes": 0,
+        "total": 1
+      },
+      "injection_conditionnelle": {
+        "detectes": 0,
+        "total": 1
+      },
+      "injection_directe_en": {
+        "detectes": 0,
+        "total": 1
+      },
+      "injection_directe_fr": {
+        "detectes": 0,
+        "total": 2
+      },
+      "injection_multilingue": {
+        "detectes": 0,
+        "total": 1
+      },
+      "paraphrase_indirecte": {
+        "detectes": 0,
+        "total": 1
+      },
+      "re_role": {
+        "detectes": 1,
+        "total": 1
+      },
+      "surcharge_noyade": {
+        "detectes": 0,
+        "total": 1
+      },
+      "tentative_modification": {
+        "detectes": 0,
+        "total": 1
+      }
+    },
+    "non_detectes": [
+      [
+        "doc_005.txt",
+        "injection_directe_en"
+      ],
+      [
+        "doc_011.txt",
+        "injection_directe_fr"
+      ],
+      [
+        "doc_015.txt",
+        "fausse_autorite_systeme"
+      ],
+      [
+        "doc_020.txt",
+        "breakout_balise"
+      ],
+      [
+        "doc_030.txt",
+        "injection_multilingue"
+      ],
+      [
+        "doc_034.txt",
+        "injection_bloc_code"
+      ],
+      [
+        "doc_038.txt",
+        "tentative_modification"
+      ],
+      [
+        "doc_042.txt",
+        "surcharge_noyade"
+      ],
+      [
+        "doc_044.txt",
+        "empoisonnement_schema"
+      ],
+      [
+        "doc_048.txt",
+        "faux_exemple_inline"
+      ],
+      [
+        "doc_052.txt",
+        "injection_conditionnelle"
+      ],
+      [
+        "doc_055.md",
+        "injection_directe_fr"
+      ],
+      [
+        "doc_058.txt",
+        "breakout_balise"
+      ],
+      [
+        "doc_062.md",
+        "empoisonnement_schema"
+      ],
+      [
+        "doc_063.txt",
+        "encodage_base64"
+      ],
+      [
+        "doc_064.md",
+        "paraphrase_indirecte"
+      ]
+    ],
+    "faux_positifs_docs": []
+  }
+}

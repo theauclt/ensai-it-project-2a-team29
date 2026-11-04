@@ -1,0 +1,20 @@
+doc_id,erreur,type,texte,detecteur,type_document
+doc_008.txt,faux_negatif,JOB_TITLE,chef du service comptabilité,,cas_limite_cercle3
+doc_016.md,faux_positif,DATE_OF_BIRTH,9 avril 1979,LLMDetector,rapport_long
+doc_018.txt,faux_negatif,JOB_TITLE,instructeur de dossiers,,convocation
+doc_019.txt,faux_positif,JOB_TITLE,président de la République,LLMDetector,cas_limite_cercle3
+doc_019.txt,faux_positif,PERSON,Emmanuel,LLMDetector,cas_limite_cercle3
+doc_019.txt,faux_positif,ORG,Journal officiel,LLMDetector,cas_limite_cercle3
+doc_022.txt,faux_negatif,LOCATION,place Bellecour,,note_courte
+doc_027.txt,faux_positif,ORG,commission de coordination des actions de prévention des expulsions locatives,LLMDetector,fiche_liaison
+doc_027.txt,faux_positif,ORG,fonds de solidarité pour le logement,LLMDetector,fiche_liaison
+doc_038.txt,faux_positif,PERSON,Pierre,LLMDetector,adversarial
+doc_038.txt,faux_positif,PERSON,Paul,LLMDetector,adversarial
+doc_043.txt,faux_negatif,LOCATION,Sablé-sur-Sarthe,,compte_rendu_reunion
+doc_043.txt,faux_positif,ORG,mairie de Sablé-sur-Sarthe,LLMDetector,compte_rendu_reunion
+doc_046.txt,faux_negatif,JOB_TITLE,formatrice indépendante,,facture
+doc_050.md,faux_positif,LOCATION,France,LLMDetector,courrier_administratif
+doc_053.txt,faux_negatif,PERSON,V.,,email_interne
+doc_061.md,faux_negatif,JOB_TITLE,chargé de mission logement,,cas_limite_cercle3
+doc_068.txt,faux_negatif,JOB_TITLE,directeur général des services,,rapport_tres_long
+doc_068.txt,faux_positif,ORG,fonds de solidarité pour le logement,LLMDetector,rapport_tres_long
