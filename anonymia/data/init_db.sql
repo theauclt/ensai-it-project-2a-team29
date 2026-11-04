@@ -29,6 +29,8 @@ CREATE TABLE traitements (
     strategie_anonymisation VARCHAR(255) NOT NULL,
     detecteurs_contributeurs VARCHAR(255) NOT NULL,
     nb_pii_detectees INTEGER NOT NULL,
+    injection_suspectee BOOLEAN NOT NULL DEFAULT FALSE,
+    types_pii TEXT NOT NULL DEFAULT '',
 
     CONSTRAINT fk_traitements_user
         FOREIGN KEY (user_id)

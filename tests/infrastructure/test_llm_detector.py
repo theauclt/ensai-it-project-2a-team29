@@ -14,7 +14,9 @@ from anonymia.infrastructure.llm_detector import (
     LLMUnavailableError,
 )
 from anonymia.infrastructure.regex_detector import RegexDetector
+from anonymia.service.business_objects.pii_span import PIISpan
 from anonymia.service.detection_service import DetectionService
+from anonymia.service.prompt_injector_detector import PromptInjectionDetector
 from tests.fakes import FakeArchiveRepository
 
 
@@ -284,6 +286,7 @@ async def test_detection_service_mode_degrade_si_llm_en_panne():
         detectors=[RegexDetector(), llm],
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     result = await service.detect(
@@ -291,9 +294,9 @@ async def test_detection_service_mode_degrade_si_llm_en_panne():
     )
 
     # le détecteur regex a fonctionné, l'email est caviardé ; le nom n'est pas vu
-    assert "marie@free.fr" not in result
-    assert "[EMAIL_1]" in result
-    assert "Martin" in result
+    assert "marie@free.fr" not in result.document
+    assert "[EMAIL_1]" in result.document
+    assert "Martin" in result.document
 
 async def test_mode_degrade_si_reponse_llm_invalide():
     # Le LLM invente un nom absent du document
@@ -305,6 +308,7 @@ async def test_mode_degrade_si_reponse_llm_invalide():
         detectors=[RegexDetector(), llm],
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     result = await service.detect(
@@ -314,11 +318,11 @@ async def test_mode_degrade_si_reponse_llm_invalide():
     )
 
     # L'email est anonymisé grâce aux regex
-    assert "[EMAIL_1]" in result
-    assert "marie@free.fr" not in result
+    assert "[EMAIL_1]" in result.document
+    assert "marie@free.fr" not in result.document
 
     # Le nom reste visible puisque le LLM a été rejeté
-    assert "Martin" in result
+    assert "Martin" in result.document
 
 async def test_detection_service_fusionne_regex_et_llm():
     class SpyStrategy:
@@ -334,11 +338,12 @@ async def test_detection_service_fusionne_regex_et_llm():
         detectors=[RegexDetector(), llm],
         strategy_factory=SpyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     result = await service.detect("M. Martin : marie@free.fr", strategy_name="peu_importe", user_id=1)
 
-    assert result == "LLMDetector:NOM,RegexDetector:EMAIL"
+    assert result.document == "LLMDetector:NOM,RegexDetector:EMAIL"
 
 
 
@@ -363,6 +368,7 @@ async def test_detection_service_ignore_detecteur_en_erreur():
         detectors=[FakeDetector(), FakeRegexDetector()],
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     spans, detectors_ok = await service._run_detectors("marie@free.fr")
@@ -370,3 +376,61 @@ async def test_detection_service_ignore_detecteur_en_erreur():
     assert len(spans) == 1
     assert spans[0].type == "EMAIL"
     assert detectors_ok == ["FakeRegexDetector"]
+
+
+# ---------------------------------------------------------------------------
+# Niveau de confiance (F2)
+# ---------------------------------------------------------------------------
+
+
+def with_confidence(*items: tuple[str, str, object]) -> str:
+    return json.dumps({"entites": [{"texte": t, "type": ty, "confiance": c} for t, ty, c in items]})
+
+
+async def test_confiance_fournie_par_le_llm_est_transmise():
+    content = "Madame Claire Martin habite à Paris."
+    detector = make_detector(
+        reply_with(with_confidence(("Martin", "NOM", 0.95), ("Paris", "LIEU", 0.6)))
+    )
+
+    spans = await detector.detect(content)
+
+    assert {s.text: s.confidence for s in spans} == {"Martin": 0.95, "Paris": 0.6}
+
+
+async def test_confiance_absente_vaut_la_valeur_par_defaut():
+    detector = make_detector(reply_with(entities(("Martin", "NOM"))))
+
+    (span,) = await detector.detect("Madame Martin.")
+
+    assert span.confidence == 0.5
+
+
+@pytest.mark.parametrize("valeur", [0, 1, 0.0, 1.0])
+async def test_confiance_aux_bornes_est_acceptee(valeur):
+    detector = make_detector(reply_with(with_confidence(("Martin", "NOM", valeur))))
+
+    (span,) = await detector.detect("Madame Martin.")
+
+    assert span.confidence == float(valeur)
+
+
+@pytest.mark.parametrize("valeur", [7, -0.1, 1.01, "élevée", None, True, [0.9]])
+async def test_confiance_invalide_leve_une_erreur(valeur):
+    detector = make_detector(reply_with(with_confidence(("Martin", "NOM", valeur))))
+
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Madame Martin.")
+
+
+async def test_champ_inconnu_dans_une_entite_reste_refuse():
+    reponse = json.dumps({"entites": [{"texte": "Martin", "type": "NOM", "confiance": 0.9, "note": "x"}]})
+    detector = make_detector(reply_with(reponse))
+
+    with pytest.raises(LLMInvalidResponseError):
+        await detector.detect("Madame Martin.")
+
+
+def test_le_prompt_demande_une_confiance():
+    assert "confiance" in SYSTEM_PROMPT
+

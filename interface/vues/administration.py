@@ -13,7 +13,7 @@ from api_client import ApiClient, ApiError
 
 utilisateur = session.exiger_connexion()
 
-st.title("👥 Administration")
+st.title("Administration")
 
 # Garde-fou d'affichage : la page n'est normalement pas proposée aux autres rôles,
 # et l'API refuserait de toute façon chaque requête (erreur 403).

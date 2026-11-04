@@ -4,10 +4,13 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from .business_objects.anonymization_result import AnonymizationResult
 from .business_objects.audit_entry import AuditEntry
 from .business_objects.pii_span import PIISpan
 from .interfaces.archive_repository import ArchiveRepository
 from .interfaces.pii_detector import PIIDetector
+from .prompt_injector_detector import PromptInjectionDetector
+from .types_pii import compter, vers_texte
 
 # Import utilisé uniquement pour le typage : pas de dépendance à l'exécution
 # de service/ vers infrastructure/
@@ -30,11 +33,12 @@ class DetectionService:
         detectors: list[PIIDetector],
         strategy_factory: "AnonymizationStrategyFactory",
         archive_repo: ArchiveRepository,
+        injection_detector: PromptInjectionDetector,
     ):
-        # Collaborateurs injectés : le service ne crée jamais RegexDetector() lui-même
         self._detectors = detectors
         self._strategy_factory = strategy_factory
         self._archive_repo = archive_repo
+        self._injection_detector = injection_detector
     
     def available_strategies(self) -> list[str]:
         """Noms des stratégies d'anonymisation disponibles (endpoint /documents/strategies)."""
@@ -49,24 +53,40 @@ class DetectionService:
 
     async def analyze(self, content: str) -> list[PIISpan]:
         """Renvoie la liste fusionnée des PII détectées (endpoint /documents/analyser)."""
-        spans, _ = await self._run_detectors(content)
-        return self._merge_spans(spans)
+        spans, _ = await self.analyze_with_status(content)
+        return spans
 
-    async def detect(self, content: str, strategy_name: str, user_id: int) -> str:
-        """
-        Renvoie le document anonymisé et archive les métadonnées du traitement
-        (endpoint /documents/caviarder).
-        """
-        # Stratégie vérifiée en premier : un nom inconnu échoue tout de suite,
-        # sans attendre l'appel au LLM (~5 s)
+    async def analyze_with_status(self, content: str) -> tuple[list[PIISpan], list[str]]:
+        """Comme analyze, avec en plus les noms des détecteurs qui ont répondu."""
+        spans, detectors_ok = await self._run_detectors(content)
+        return self._merge_spans(spans), detectors_ok
+
+    def injection_types(self, content: str) -> list[str]:
+        """Catégories d'injection de prompt repérées dans le texte (vide si rien de suspect)."""
+        return self._injection_detector.detect(content)
+
+    async def detect(
+        self,
+        content: str,
+        strategy_name: str,
+        user_id: int,
+        confirmed: bool = False,
+    ) -> AnonymizationResult:
         strategy = self._strategy_factory.get_strategy(strategy_name)
+
+        # Filtre d'injection avant les détecteurs (donc avant le LLM)
+        injection_types = self._injection_detector.detect(content)
+        if injection_types and not confirmed:
+            return AnonymizationResult(
+                document=None,
+                types_injection=injection_types,
+                confirmation_requise=True,
+            )
 
         spans, detectors_ok = await self._run_detectors(content)
         spans = self._merge_spans(spans)
         anonymized = strategy.apply(content, spans)
 
-        # Uniquement des métadonnées : ni le contenu, ni les PII elles-mêmes.
-        # Si l'archivage échoue, l'erreur remonte : pas de traitement sans trace (F4).
         await self._archive_repo.save(
             AuditEntry(
                 user_id=user_id,
@@ -75,9 +95,11 @@ class DetectionService:
                 strategie_anonymisation=strategy_name,
                 detecteurs_contributeurs=",".join(detectors_ok),
                 nb_pii_detectees=len(spans),
+                injection_suspectee=bool(injection_types),
+                types_pii=vers_texte(compter(spans)),
             )
         )
-        return anonymized
+        return AnonymizationResult(document=anonymized, types_injection=injection_types, detecteurs=detectors_ok)
 
     async def _run_detectors(self, content: str) -> tuple[list[PIISpan], list[str]]:
         """

@@ -4,7 +4,11 @@ Mise en forme de l'historique des traitements pour l'affichage et l'export CSV.
 Ce module n'importe pas Streamlit : il se teste seul, avec de simples listes de dictionnaires.
 Il reçoit les traitements tels que les renvoie l'API (GET /journaux) :
 id, user_id, date_traitement, hash_document, strategie_anonymisation,
-detecteurs_contributeurs, nb_pii_detectees.
+detecteurs_contributeurs, nb_pii_detectees, injection_suspectee.
+
+injection_suspectee vaut True quand le document contenait des motifs d'injection de prompt et
+que l'utilisateur a confirmé le traitement malgré l'alerte. Les traitements archivés avant
+l'ajout de cette colonne n'ont pas le champ : on les considère comme non suspects.
 """
 import csv
 import io
@@ -13,10 +17,21 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 FUSEAU_PAR_DEFAUT = "Europe/Paris"
 
-COLONNES = ["Date", "Utilisateur", "Stratégie", "Détecteurs", "Données détectées", "Empreinte du document"]
+COLONNES = [
+    "Date",
+    "Utilisateur",
+    "Stratégie",
+    "Détecteurs",
+    "Données détectées",
+    "Injection suspectée",
+    "Empreinte du document",
+]
 
 _STRATEGIES = {"masking": "Masquage", "pseudonymization": "Pseudonymisation"}
 _DETECTEURS = {"RegexDetector": "Regex", "LLMDetector": "LLM"}
+
+# Tranches du nombre de données détectées par document (borne haute incluse), dans l'ordre d'affichage
+_TRANCHES = [("0", 0), ("1 à 2", 2), ("3 à 5", 5), ("6 à 10", 10), ("Plus de 10", None)]
 
 
 def fuseau(nom: str | None) -> tzinfo:
@@ -47,6 +62,11 @@ def libelle_detecteurs(contributeurs: str) -> str:
         return "Aucun"
     libelles = [_DETECTEURS.get(n, n) for n in noms]
     return f"{libelles[0]} seul" if len(libelles) == 1 else " + ".join(libelles)
+
+
+def injection_suspectee(traitement: dict) -> bool:
+    """Vrai si le traitement a été fait malgré des motifs d'injection de prompt (absent = faux)."""
+    return bool(traitement.get("injection_suspectee", False))
 
 
 def _date_locale(texte: str, tz: tzinfo) -> datetime:
@@ -86,6 +106,7 @@ def lignes_tableau(
                 "Stratégie": _STRATEGIES.get(t["strategie_anonymisation"], t["strategie_anonymisation"]),
                 "Détecteurs": libelle_detecteurs(t["detecteurs_contributeurs"]),
                 "Données détectées": t["nb_pii_detectees"],
+                "Injection suspectée": injection_suspectee(t),
                 "Empreinte du document": empreinte if hash_complet else empreinte[:12] + "…",
             }
         )
@@ -102,7 +123,89 @@ def statistiques(traitements: list[dict], tz: tzinfo) -> dict:
         "traitements": len(traitements),
         "pii": sum(t["nb_pii_detectees"] for t in traitements),
         "utilisateurs": len({t["user_id"] for t in traitements}),
+        "injections": sum(injection_suspectee(t) for t in traitements),
         "par_jour": dict(sorted(par_jour.items())),
+    }
+
+
+def _tranche(nb_pii: int) -> str:
+    """Nom de la tranche (« 0 », « 1 à 2 »...) dans laquelle tombe un nombre de données détectées."""
+    for nom, borne in _TRANCHES:
+        if borne is None or nb_pii <= borne:
+            return nom
+    return _TRANCHES[-1][0]
+
+
+def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo) -> dict:
+    """
+    Agrégats de la page Tableau de bord, calculés sur les traitements renvoyés par l'API.
+
+    Les répartitions (par utilisateur, stratégie, détecteurs) sont triées de la plus grande à la plus
+    petite. « sans_llm » compte les traitements où le LLM n'a pas contribué : mode dégradé (LLM en
+    panne) ou application lancée avec LLM_ENABLED=false.
+    """
+    base = statistiques(traitements, tz)
+    total = base["traitements"]
+
+    par_utilisateur: dict[str, int] = {}
+    detail_utilisateur: dict[str, dict] = {}
+    par_strategie: dict[str, int] = {}
+    par_detecteurs: dict[str, int] = {}
+    par_tranche = {nom: 0 for nom, _ in _TRANCHES}
+    sans_llm = 0
+    pii_max = 0
+    for t in traitements:
+        nom = logins.get(t["user_id"]) or f"n°{t['user_id']}"
+        par_utilisateur[nom] = par_utilisateur.get(nom, 0) + 1
+
+        nb_pii = t["nb_pii_detectees"]
+        pii_max = max(pii_max, nb_pii)
+        par_tranche[_tranche(nb_pii)] += 1
+        ligne = detail_utilisateur.setdefault(nom, {"traitements": 0, "pii": 0, "dernier": None})
+        ligne["traitements"] += 1
+        ligne["pii"] += nb_pii
+        date = _date_locale(t["date_traitement"], tz)
+        if ligne["dernier"] is None or date > ligne["dernier"]:
+            ligne["dernier"] = date
+
+        strategie = _STRATEGIES.get(t["strategie_anonymisation"], t["strategie_anonymisation"])
+        par_strategie[strategie] = par_strategie.get(strategie, 0) + 1
+
+        libelle = libelle_detecteurs(t["detecteurs_contributeurs"])
+        par_detecteurs[libelle] = par_detecteurs.get(libelle, 0) + 1
+
+        if "LLMDetector" not in t["detecteurs_contributeurs"].split(","):
+            sans_llm += 1
+
+    def trier(repartition: dict[str, int]) -> dict[str, int]:
+        return dict(sorted(repartition.items(), key=lambda element: (-element[1], element[0])))
+
+    detail = [
+        {
+            "Utilisateur": nom,
+            "Traitements": d["traitements"],
+            "Données détectées": d["pii"],
+            "Moyenne par document": round(d["pii"] / d["traitements"], 1),
+            "Dernier traitement": d["dernier"],
+        }
+        for nom, d in detail_utilisateur.items()
+    ]
+    detail.sort(key=lambda ligne: (-ligne["Traitements"], ligne["Utilisateur"]))
+
+    return {
+        "traitements": total,
+        "pii": base["pii"],
+        "utilisateurs": base["utilisateurs"],
+        "pii_moyenne": round(base["pii"] / total, 1) if total else 0.0,
+        "pii_max": pii_max,
+        "par_tranche": par_tranche,
+        "detail_utilisateurs": detail,
+        "sans_llm": sans_llm,
+        "part_sans_llm": round(100 * sans_llm / total) if total else 0,
+        "par_jour": base["par_jour"],
+        "par_utilisateur": trier(par_utilisateur),
+        "par_strategie": trier(par_strategie),
+        "par_detecteurs": trier(par_detecteurs),
     }
 
 
@@ -112,6 +215,8 @@ def _proteger(valeur):
 
     On préfixe alors d'une apostrophe. Les nombres et les dates ne sont pas concernés.
     """
+    if isinstance(valeur, bool):
+        return "Oui" if valeur else "Non"
     if isinstance(valeur, str) and valeur[:1] in ("=", "+", "-", "@", "\t", "\r"):
         return "'" + valeur
     return valeur

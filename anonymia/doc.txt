@@ -88,6 +88,10 @@ Creer les tables :
 
     python -m anonymia.data.init_db
 
+A RELANCER apres chaque "git pull" : quand l'equipe ajoute une colonne a la
+base (injection_suspectee, types_pii...), cette commande l'ajoute a vos tables
+existantes, sans rien supprimer. Sans cela, l'API repond 500 (voir partie 10).
+
 Le compte administrateur est cree automatiquement au demarrage de l'API si
 ADMIN_LOGIN et ADMIN_PASSWORD sont dans .env (partie 3). Sans ces variables,
 le creer a la main :
@@ -152,6 +156,9 @@ Aucun outil a installer : tout se fait dans la page.
    POST /documents/caviarder   corps : {"contenu": "...", "strategie": "masking"}
                                strategie : "masking" ou "pseudonymization"
    POST /documents/analyser    corps : {"contenu": "..."}
+                               chaque PII renvoyee a : texte, type, debut, fin,
+                               detecteur et confiance (de 0 a 1, voir la
+                               partie "Niveau de confiance" apres la partie 9)
    GET  /documents/strategies  pas de corps
    GET  /journaux              reserve aux roles SUPERVISOR et ADMIN
                                filtres facultatifs : utilisateur (login),
@@ -243,7 +250,9 @@ F. Document sans donnee personnelle
 G. Historique, avec un compte SUPERVISOR ou ADMIN
    GET /journaux
    Attendu : les traitements precedents, du plus recent au plus ancien, avec
-   hash_document, strategie, nombre de PII. JAMAIS le texte des documents.
+   hash_document, strategie, nombre de PII et types_pii (nombre par type, par
+   exemple {"EMAIL": 2, "TELEPHONE": 1}). JAMAIS le texte des documents.
+   Les traitements enregistres avant l'ajout des types ont types_pii = {}.
    Essayer aussi le filtre utilisateur=alice et date_debut=2026-01-01.
 
 H. Droits : se connecter avec le compte USER, puis GET /journaux
@@ -257,6 +266,15 @@ H2. Administration : avec le compte ADMIN
    Le role est lu dans le jeton : une desactivation ou un changement de role
    ne prend effet sur un jeton deja emis qu'a son expiration (30 minutes).
 
+H3. Tableau de bord (interface Streamlit, parties "interface" en fin de fichier)
+   Faire d'abord quelques "caviarder" avec des comptes differents, puis :
+   - compte SUPERVISOR ou ADMIN : la page "Tableau de bord" est dans le menu
+     et affiche les chiffres, l'alerte eventuelle et les graphiques
+   - filtre sur un login ou une periode : tous les chiffres changent
+   - compte USER : la page n'apparait pas dans le menu
+   - API lancee avec LLM_ENABLED=false, puis quelques "caviarder" : l'alerte
+     "traitements faits sans le LLM" apparait
+
 I. Erreurs attendues
    - Appeler un endpoint sans etre connecte ............... 401
    - "strategie": "magie" ................................. 400
@@ -267,6 +285,17 @@ J. Avec le LLM (voir la partie 9)
    {"contenu": "Madame Claire Martin, nee le 12 mars 1985 a Nantes, habite 12 rue des Lilas a Rennes."}
    Attendu (variable, le LLM n'est pas deterministe) : PRENOM Claire, NOM Martin,
    DATE_NAISSANCE, LIEU Nantes et Rennes, ADRESSE. Premier appel : environ 5 s.
+
+K. Niveau de confiance
+   POST /documents/analyser
+   {"contenu": "Madame Claire Martin habite a Paris. Mail : claire@mail.fr"}
+   Attendu : chaque PII a un champ "confiance" entre 0 et 1.
+   - claire@mail.fr (RegexDetector) : toujours 1.0
+   - les noms, lieux... (LLMDetector) : valeurs variables donnees par le LLM,
+     plus basses quand c'est ambigu (par exemple "Paris" : prenom ou ville ?)
+   Sans LLM (LLM_ENABLED=false) : seules les PII regex, toutes a 1.0.
+   Dans l'interface (page Caviardage, bouton "Analyser") : colonne "Confiance"
+   du tableau, et valeur au survol d'une donnee surlignee.
 
 
 --------------------------------------------------------------------------------
@@ -305,6 +334,68 @@ mentionne alors que RegexDetector.
 
 
 --------------------------------------------------------------------------------
+9 bis. NIVEAU DE CONFIANCE DES PII DETECTEES
+--------------------------------------------------------------------------------
+
+Chaque PII renvoyee par POST /documents/analyser a un champ "confiance", un
+nombre entre 0 et 1 qui dit a quel point la detection est fiable. Il sert a
+repérer les passages a relire en priorite.
+
+Qui donne la confiance :
+- Expressions regulieres : toujours 1.0. Leurs formats sont surs (email,
+  telephone, IBAN et NIR a cle de controle, plaques...).
+- LLM : c'est le modele qui juge, sur demande du prompt, avec une valeur entre
+  0 et 1 (proche de 1 : sur ; vers 0,5 : ambigu ; proche de 0 : il hesite).
+
+Verification de la reponse du LLM (securite F5) :
+- Confiance absente pour une entite : l'entite est gardee avec la valeur par
+  defaut 0,5, pour ne jamais perdre une PII a cause d'un champ oublie.
+- Confiance invalide (texte, nombre hors de 0 a 1, booleen...) : la reponse du
+  LLM est rejetee comme toute reponse mal formee, et l'API continue avec les
+  expressions regulieres seules (mode degrade).
+- Un champ inconnu dans une entite reste refuse.
+
+Doublons entre detecteurs : si deux detections se chevauchent, on garde celle de
+plus haute confiance ; a confiance egale, celle qui commence en premier, puis la
+plus longue. Une expression reguliere (1.0) l'emporte donc sur le LLM.
+
+Regle importante : la confiance INFORME, elle ne decide jamais de ce qui est
+caviarde. Toutes les PII detectees sont caviardees, meme avec une confiance
+basse. Sinon, un document pourrait demander au LLM de donner une confiance de 0
+a ses propres donnees pour echapper au caviardage.
+
+Limite : la confiance du LLM est une auto-evaluation du modele, pas une
+probabilite mesuree. Elle est utile pour reperer les cas ambigus, mais un LLM
+peut se tromper avec assurance.
+
+
+--------------------------------------------------------------------------------
+9 ter. TYPES DE PII DANS L'HISTORIQUE
+--------------------------------------------------------------------------------
+
+Pour chaque traitement (POST /documents/caviarder), l'historique enregistre le
+nombre de donnees detectees ET leur repartition par type. GET /journaux renvoie
+par exemple :
+
+    "nb_pii_detectees": 3,
+    "types_pii": {"EMAIL": 2, "TELEPHONE": 1}
+
+Ce qui est enregistre : uniquement le TYPE et le NOMBRE. Jamais le texte des
+donnees : savoir qu'il y avait 2 e-mails ne permet pas de les retrouver.
+
+En base : colonne "types_pii" (texte, par exemple "EMAIL:2,TELEPHONE:1") de la
+table traitements. Les traitements enregistres avant cet ajout ont une valeur
+vide, renvoyee par l'API comme {} et affichee "—" dans l'interface.
+
+Dans l'interface : la page Historique a une colonne "Types de donnees" (aussi dans
+l'export CSV), et le Tableau de bord un graphique "Donnees detectees par type".
+
+Types possibles : EMAIL, TELEPHONE, NIR, IBAN, PLAQUE_ACTUELLE, PLAQUE_ANCIENNE,
+PLAQUE_DIPLOMATIQUE (expressions regulieres) ; NOM, PRENOM, LIEU, ORGANISATION,
+ADRESSE, DATE_NAISSANCE, POSTE (LLM).
+
+
+--------------------------------------------------------------------------------
 10. PROBLEMES FREQUENTS
 --------------------------------------------------------------------------------
 
@@ -319,6 +410,12 @@ L'API ne demarre pas : "ADMIN_PASSWORD trop court"
 
 L'API ne demarre pas au premier lancement, erreur sur la table "users"
     -> Les tables n'existent pas : lancer init_db avant (partie 4).
+
+Caviardage ou historique : erreur 500, et dans le terminal d'uvicorn
+"psycopg2.errors.UndefinedColumn: column ... does not exist"
+    -> Votre base n'a pas une colonne ajoutee par l'equipe. Arreter l'API,
+       lancer "python -m anonymia.data.init_db" (sans danger, rien n'est
+       supprime), puis relancer l'API. A faire apres chaque "git pull".
 
 KeyError: 'POSTGRES_HOST' (ou autre variable POSTGRES_*)
     -> .env absent ou incomplet, ou commande lancee hors de la racine du depot.
@@ -344,17 +441,26 @@ pip install : erreur sur un paquet "installe par le systeme"
 11. LIMITES CONNUES (v0)
 --------------------------------------------------------------------------------
 
+Choix assume : pas d'inscription libre. Les comptes sont crees par
+l'administrateur via /admin/utilisateurs (le premier au demarrage, via
+ADMIN_LOGIN et ADMIN_PASSWORD, ou avec scripts/create_user.py).
+
 Pas encore disponible :
-- inscription libre et deconnexion (les comptes sont crees par l'administrateur
-  via /admin/utilisateurs ; le premier est cree au demarrage via ADMIN_LOGIN et
-  ADMIN_PASSWORD, ou avec scripts/create_user.py)
+- deconnexion cote API (l'interface Streamlit propose un bouton "Se deconnecter")
+- modification du mot de passe : un utilisateur ne peut pas changer le sien,
+  et l'administrateur ne peut pas le reinitialiser (le mot de passe fixe a la
+  creation du compte reste valable ; pour le renouveler, supprimer et recreer
+  le compte). Hors du perimetre demande par le cahier des charges (F1)
 - revocation immediate des jetons (voir H2)
 - detail d'un traitement (/journaux/{id})
-- interface graphique (Streamlit)
-- pre-filtre contre l'injection de prompt (seuls le prompt strict et la
-  verification de la sortie du LLM sont en place)
+- blocage des documents suspects : le pre-filtre contre l'injection de prompt
+  (PromptInjectionDetector) detecte quelques formulations connues et les
+  journalise, mais le traitement continue ; pas encore de tests adversariaux
 
 Comportements a connaitre :
+- la confiance des PII du LLM est celle qu'il s'attribue lui-meme (voir 9 bis) ;
+  celle des expressions regulieres est toujours 1.0, y compris pour les formats
+  les plus larges (anciennes plaques d'immatriculation par exemple)
 - le jeton dure 30 minutes et n'est pas reverifie en base : un compte desactive
   garde son acces jusqu'a l'expiration du jeton
 - /journaux affiche l'identifiant numerique de l'utilisateur, pas son login
@@ -379,9 +485,86 @@ Pour qu'un bug soit reproductible, indiquez :
 Ne collez jamais de vrai document personnel, de mot de passe, de cle API ni le
 contenu de votre fichier .env dans un message ou une issue.
 
---------------
-interface
---------------
-Exécutez dans un 2ème Terminal :
+--------------------------------------------------------------------------------
+13. INTERFACE
+--------------------------------------------------------------------------------
+
+L'interface Streamlit est un site web qui appelle l'API : elle ne contient pas de
+logique de detection ni de comptes, tout passe par les routes de la partie 6.
+Elle doit donc etre lancee APRES l'API.
+
+Executez dans un 2eme Terminal :
    source .venv/bin/activate
    python -m streamlit run interface/app.py
+
+Pages, selon le role du compte connecte (le menu n'affiche que celles permises ;
+l'API controle de toute facon les droits et renvoie 403 sinon) :
+
+   Connexion ............ avant la connexion
+   Caviardage ........... tous les comptes connectes
+   Tableau de bord ...... SUPERVISOR et ADMIN
+   Historique ........... SUPERVISOR et ADMIN
+   Administration ....... ADMIN seulement
+
+Page "Tableau de bord"
+   Vue de synthese de l'activite, pour savoir en un coup d'oeil comment
+   l'application est utilisee, la ou la page "Historique" liste les traitements
+   un par un. Elle utilise les memes donnees (GET /journaux) : uniquement des
+   metadonnees, jamais le texte des documents.
+
+   Filtres (en haut, bouton "Afficher") : login d'un utilisateur, date de debut
+   et date de fin. Tous les chiffres ci-dessous suivent ces filtres.
+
+   Chiffres cles :
+   - Traitements ............... nombre de documents caviardes
+   - Donnees detectees ......... total des donnees personnelles trouvees
+   - Moyenne par document ...... donnees detectees / traitements
+   - Utilisateurs actifs ....... nombre de comptes ayant fait au moins un
+                                 traitement sur la periode
+
+   Alerte "sans LLM" : affichee des qu'au moins un traitement a ete fait sans
+   la detection par LLM. Elle donne leur nombre et leur part du total :
+
+       pourcentage = traitements sans LLM / traitements total x 100
+       exemple : 2 sans LLM sur 10 traitements -> 20 %
+
+   Comment l'application le sait : chaque traitement archive la liste des
+   detecteurs qui ont repondu ("Regex + LLM", ou "Regex seul" si le LLM n'a
+   pas repondu). Un traitement dont la liste ne contient pas le LLM compte
+   comme "sans LLM".
+
+   Pourquoi c'est important : sans le LLM, seules les expressions regulieres
+   travaillent (email, telephone, IBAN...). Les noms, lieux et dates de
+   naissance, que seul le LLM detecte, peuvent alors ne pas etre caviardes.
+
+   Comment lire le pourcentage :
+   - 0 %  : le LLM a toujours repondu, tout va bien
+   - quelques % : pannes ponctuelles, a surveiller
+   - beaucoup plus eleve qu'a l'habitude : le service LLM a sans doute un
+     probleme. La page ne montre pas l'evolution dans le temps : pour comparer,
+     changer la periode avec les filtres (par exemple aujourd'hui et la
+     semaine derniere).
+   - 100 % : normal si l'API a ete lancee avec LLM_ENABLED=false (le LLM n'est
+     alors jamais utilise), pas forcement une panne.
+
+   Graphiques :
+   - Activite par jour (si la periode couvre plusieurs jours)
+   - Par utilisateur : qui traite combien de documents, du plus actif au moins actif
+   - Donnees detectees par document : combien de documents contiennent 0, 1 a 2,
+     3 a 5, 6 a 10 ou plus de 10 donnees (une moyenne seule peut cacher un
+     document tres charge)
+   - Donnees detectees par type : combien d'e-mails, de noms, d'IBAN...
+     (les trois types de plaques sont regroupes sous "Plaque")
+   - Strategie choisie : masquage ou pseudonymisation
+   - Detecteurs utilises : "Regex + LLM" ou "Regex seul"
+   - Detail par utilisateur (tableau) : traitements, donnees detectees, moyenne
+     par document et dernier traitement
+
+   Limites :
+   - Un SUPERVISOR voit les utilisateurs par numero (n°2) et non par login :
+     seul un ADMIN peut lire la liste des comptes.
+   - Le graphique par type ne compte que les traitements faits apres l'ajout
+     des types dans l'historique : les plus anciens n'ont que le nombre de
+     donnees. La page indique combien de traitements sont exclus.
+   - Les jours sont comptes dans le fuseau du navigateur (Paris par defaut),
+     mais les filtres "Du" et "Au" comptent des jours UTC.

@@ -17,6 +17,7 @@ dependencies = [
     "PyJWT>=2.8",
     "phonenumbers==9.0.40",
     "python-dotenv>=1.0",
+    "streamlit>=1.66",
 ]
 
 [project.optional-dependencies]
@@ -24,9 +25,6 @@ dev = [
     "pytest==9.0.2",
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
-]
-ui = [
-    "streamlit>=1.66",
 ]
 
 [tool.setuptools.packages.find]
