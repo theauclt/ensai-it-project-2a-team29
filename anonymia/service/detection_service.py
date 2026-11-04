@@ -52,8 +52,17 @@ class DetectionService:
 
     async def analyze(self, content: str) -> list[PIISpan]:
         """Renvoie la liste fusionnée des PII détectées (endpoint /documents/analyser)."""
-        spans, _ = await self._run_detectors(content)
-        return self._merge_spans(spans)
+        spans, _ = await self.analyze_with_status(content)
+        return spans
+
+    async def analyze_with_status(self, content: str) -> tuple[list[PIISpan], list[str]]:
+        """Comme analyze, avec en plus les noms des détecteurs qui ont répondu."""
+        spans, detectors_ok = await self._run_detectors(content)
+        return self._merge_spans(spans), detectors_ok
+
+    def injection_types(self, content: str) -> list[str]:
+        """Catégories d'injection de prompt repérées dans le texte (vide si rien de suspect)."""
+        return self._injection_detector.detect(content)
 
     async def detect(
         self,
@@ -88,7 +97,7 @@ class DetectionService:
                 injection_suspectee=bool(injection_types),
             )
         )
-        return AnonymizationResult(document=anonymized, types_injection=injection_types)
+        return AnonymizationResult(document=anonymized, types_injection=injection_types, detecteurs=detectors_ok)
 
     async def _run_detectors(self, content: str) -> tuple[list[PIISpan], list[str]]:
         """

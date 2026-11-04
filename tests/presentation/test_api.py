@@ -442,3 +442,44 @@ def test_admin_ne_peut_pas_se_supprimer_ni_se_desactiver(client):
     assert client.patch(
         "/admin/utilisateurs/3/activation", headers=h, json={"est_active": False}
     ).status_code == 409
+
+# ---------------------------------------------------------------------------
+# Signaux affichés par l'interface : mode dégradé et injection
+# ---------------------------------------------------------------------------
+
+def test_analyser_sans_llm_signale_le_mode_degrade(client):
+    corps = client.post(
+        "/documents/analyser", json={"contenu": DOCUMENT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["detecteurs"] == ["RegexDetector"]
+    assert corps["mode_degrade"] is True
+    assert corps["types_injection"] == []
+
+
+def test_analyser_signale_l_injection_sans_bloquer(client):
+    corps = client.post(
+        "/documents/analyser", json={"contenu": SUSPECT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["types_injection"]
+    assert "pii" in corps
+
+
+def test_caviarder_sans_llm_signale_le_mode_degrade(client):
+    corps = client.post(
+        "/documents/caviarder", json={"contenu": DOCUMENT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["mode_degrade"] is True
+    assert corps["detecteurs"] == ["RegexDetector"]
+
+
+def test_confirmation_requise_donne_les_types_d_injection(client):
+    corps = client.post(
+        "/documents/caviarder", json={"contenu": SUSPECT}, headers=en_tete(client, "alice")
+    ).json()
+
+    assert corps["confirmation_requise"] is True
+    assert corps["types_injection"]
+    assert corps["mode_degrade"] is False  # aucun détecteur n'a tourné
