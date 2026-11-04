@@ -18,6 +18,7 @@ from .service.detection_service import DetectionService
 from .service.history_service import HistoryService
 from .service.interfaces.archive_repository import ArchiveRepository
 from .service.interfaces.user_repository import UserRepository
+from .service.prompt_injector_detector import PromptInjectionDetector
 
 # Charge automatiquement les variables du fichier .env dans os.environ
 load_dotenv()
@@ -62,6 +63,7 @@ def build_detection_service(
         detectors=detectors,
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=archive_repo,
+        injection_detector=PromptInjectionDetector(),
     )
 
 

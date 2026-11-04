@@ -27,6 +27,7 @@ class CaviarderRequest(DocumentRequest):
     """Corps de POST /documents/caviarder : le texte et la stratégie choisie."""
 
     strategie: str = "masking"
+    confirmer: bool = False
 
 
 class PIIResponse(BaseModel):
@@ -48,7 +49,9 @@ class AnalyseResponse(BaseModel):
 class CaviardageResponse(BaseModel):
     """Réponse de POST /documents/caviarder."""
 
-    document_caviarde: str
+    document_caviarde: str | None = None
+    confirmation_requise: bool = False
+    avertissements: list[str] = []
 
 
 class StrategiesResponse(BaseModel):
@@ -67,6 +70,7 @@ class TraitementResponse(BaseModel):
     strategie_anonymisation: str
     detecteurs_contributeurs: str
     nb_pii_detectees: int
+    injection_suspectee: bool = False
 
 
 class CreerUtilisateurRequest(BaseModel):

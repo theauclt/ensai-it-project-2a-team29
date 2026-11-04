@@ -6,7 +6,6 @@ import httpx
 
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
-from ..service.prompt_injector_detector import PromptInjectionDetector
 
 # Ca serait bien de renvoyer un span personne plutot que nom et prenom separé
 
@@ -111,9 +110,7 @@ class LLMDetector(PIIDetector):
         """
         self._client = client
         self._model = model
-
-        # Initialisation du détecteur de prompt injection
-        self._injection_detector = PromptInjectionDetector()
+        
 
     async def aclose(self) -> None:
         """Ferme le client HTTP."""
@@ -128,11 +125,11 @@ class LLMDetector(PIIDetector):
         if not content.strip():
             return []
 
-        # 1. Détection des tentatives potentielles de prompt injection
-        injection_result = self._injection_detector.analyze(content)
 
-        # Le traitement continue même si un motif suspect est détecté.
-        # La journalisation est déjà effectuée par PromptInjectionDetector.
+        raw = await self._call_llm(content)
+        data = self._extract_json(raw)
+        entities = self._validate_entities(data, content)
+        return self._locate_spans(entities, content)
 
         # 2. Appel au LLM pour détecter les données personnelles
         raw = await self._call_llm(content)

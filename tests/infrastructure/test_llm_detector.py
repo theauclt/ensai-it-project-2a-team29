@@ -14,7 +14,9 @@ from anonymia.infrastructure.llm_detector import (
     LLMUnavailableError,
 )
 from anonymia.infrastructure.regex_detector import RegexDetector
+from anonymia.service.business_objects.pii_span import PIISpan
 from anonymia.service.detection_service import DetectionService
+from anonymia.service.prompt_injector_detector import PromptInjectionDetector
 from tests.fakes import FakeArchiveRepository
 
 
@@ -284,6 +286,7 @@ async def test_detection_service_mode_degrade_si_llm_en_panne():
         detectors=[RegexDetector(), llm],
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     result = await service.detect(
@@ -291,9 +294,9 @@ async def test_detection_service_mode_degrade_si_llm_en_panne():
     )
 
     # le détecteur regex a fonctionné, l'email est caviardé ; le nom n'est pas vu
-    assert "marie@free.fr" not in result
-    assert "[EMAIL_1]" in result
-    assert "Martin" in result
+    assert "marie@free.fr" not in result.document
+    assert "[EMAIL_1]" in result.document
+    assert "Martin" in result.document
 
 async def test_mode_degrade_si_reponse_llm_invalide():
     # Le LLM invente un nom absent du document
@@ -305,6 +308,7 @@ async def test_mode_degrade_si_reponse_llm_invalide():
         detectors=[RegexDetector(), llm],
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     result = await service.detect(
@@ -314,11 +318,11 @@ async def test_mode_degrade_si_reponse_llm_invalide():
     )
 
     # L'email est anonymisé grâce aux regex
-    assert "[EMAIL_1]" in result
-    assert "marie@free.fr" not in result
+    assert "[EMAIL_1]" in result.document
+    assert "marie@free.fr" not in result.document
 
     # Le nom reste visible puisque le LLM a été rejeté
-    assert "Martin" in result
+    assert "Martin" in result.document
 
 async def test_detection_service_fusionne_regex_et_llm():
     class SpyStrategy:
@@ -334,11 +338,12 @@ async def test_detection_service_fusionne_regex_et_llm():
         detectors=[RegexDetector(), llm],
         strategy_factory=SpyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     result = await service.detect("M. Martin : marie@free.fr", strategy_name="peu_importe", user_id=1)
 
-    assert result == "LLMDetector:NOM,RegexDetector:EMAIL"
+    assert result.document == "LLMDetector:NOM,RegexDetector:EMAIL"
 
 
 
@@ -363,6 +368,7 @@ async def test_detection_service_ignore_detecteur_en_erreur():
         detectors=[FakeDetector(), FakeRegexDetector()],
         strategy_factory=AnonymizationStrategyFactory(),
         archive_repo=FakeArchiveRepository(),
+        injection_detector=PromptInjectionDetector(),
     )
 
     spans, detectors_ok = await service._run_detectors("marie@free.fr")
