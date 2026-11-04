@@ -182,3 +182,65 @@ async def test_injection_confirmee_est_traitee_et_marquee(archive):
 async def test_strategie_inconnue_echoue_avant_le_filtre_d_injection(archive):
     with pytest.raises(ValueError):
         await make_service(archive).detect(SUSPECT, "magie", user_id=1)
+
+
+# ---------------------------------------------------------------------------
+# Fusion des spans et niveau de confiance
+# ---------------------------------------------------------------------------
+
+
+def span(start, end, confidence=1.0, type_="NOM", source="LLMDetector"):
+    return PIISpan("x" * (end - start), type_, start, end, source, confidence)
+
+
+def test_les_pii_sans_chevauchement_sont_toutes_gardees_et_triees():
+    spans = [span(20, 25, 0.1), span(0, 5, 0.9), span(10, 15, 0.5)]
+
+    merged = DetectionService._merge_spans(spans)
+
+    assert [(s.start, s.end) for s in merged] == [(0, 5), (10, 15), (20, 25)]
+
+
+def test_une_confiance_basse_n_ecarte_pas_une_pii_isolee():
+    merged = DetectionService._merge_spans([span(0, 5, 0.01)])
+
+    assert len(merged) == 1
+
+
+def test_en_cas_de_chevauchement_la_plus_haute_confiance_gagne():
+    # le span le plus à gauche est le moins sûr : il perd
+    gauche = span(0, 10, 0.4, type_="ADRESSE")
+    droite = span(5, 15, 0.9, type_="NOM")
+
+    merged = DetectionService._merge_spans([gauche, droite])
+
+    assert merged == [droite]
+
+
+def test_a_confiance_egale_le_span_le_plus_a_gauche_puis_le_plus_long_gagne():
+    court = span(0, 5, 0.8)
+    long = span(0, 9, 0.8)
+    decale = span(3, 12, 0.8)
+
+    assert DetectionService._merge_spans([court, long, decale]) == [long]
+    assert DetectionService._merge_spans([decale, court]) == [court]
+
+
+def test_le_regex_a_1_l_emporte_sur_le_llm_en_cas_de_doublon():
+    regex = span(5, 17, 1.0, type_="EMAIL", source="RegexDetector")
+    llm = span(5, 17, 0.7, type_="NOM", source="LLMDetector")
+
+    assert DetectionService._merge_spans([llm, regex]) == [regex]
+
+
+async def test_analyze_renvoie_la_confiance_des_detecteurs(archive):
+    class DetecteurSur(PIIDetector):
+        async def detect(self, content):
+            return [PIISpan("dossier", "NOM", 28, 35, "FakeLLM", 0.42)]
+
+    service = make_service(archive, [RegexDetector(), DetecteurSur()])
+
+    spans = await service.analyze(CONTENT)
+
+    assert {s.source_detector: s.confidence for s in spans} == {"RegexDetector": 1.0, "FakeLLM": 0.42}
+

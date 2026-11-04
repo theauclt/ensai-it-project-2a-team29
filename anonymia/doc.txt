@@ -152,6 +152,9 @@ Aucun outil a installer : tout se fait dans la page.
    POST /documents/caviarder   corps : {"contenu": "...", "strategie": "masking"}
                                strategie : "masking" ou "pseudonymization"
    POST /documents/analyser    corps : {"contenu": "..."}
+                               chaque PII renvoyee a : texte, type, debut, fin,
+                               detecteur et confiance (de 0 a 1, voir la
+                               partie "Niveau de confiance" apres la partie 9)
    GET  /documents/strategies  pas de corps
    GET  /journaux              reserve aux roles SUPERVISOR et ADMIN
                                filtres facultatifs : utilisateur (login),
@@ -277,6 +280,17 @@ J. Avec le LLM (voir la partie 9)
    Attendu (variable, le LLM n'est pas deterministe) : PRENOM Claire, NOM Martin,
    DATE_NAISSANCE, LIEU Nantes et Rennes, ADRESSE. Premier appel : environ 5 s.
 
+K. Niveau de confiance
+   POST /documents/analyser
+   {"contenu": "Madame Claire Martin habite a Paris. Mail : claire@mail.fr"}
+   Attendu : chaque PII a un champ "confiance" entre 0 et 1.
+   - claire@mail.fr (RegexDetector) : toujours 1.0
+   - les noms, lieux... (LLMDetector) : valeurs variables donnees par le LLM,
+     plus basses quand c'est ambigu (par exemple "Paris" : prenom ou ville ?)
+   Sans LLM (LLM_ENABLED=false) : seules les PII regex, toutes a 1.0.
+   Dans l'interface (page Caviardage, bouton "Analyser") : colonne "Confiance"
+   du tableau, et valeur au survol d'une donnee surlignee.
+
 
 --------------------------------------------------------------------------------
 8. TESTS AUTOMATIQUES
@@ -311,6 +325,42 @@ Test rapide du LLM seul, sans l'API :
 Si le LLM est indisponible, l'API continue avec les expressions regulieres
 seules (mode degrade) : le champ "detecteurs_contributeurs" de /journaux ne
 mentionne alors que RegexDetector.
+
+
+--------------------------------------------------------------------------------
+9 bis. NIVEAU DE CONFIANCE DES PII DETECTEES
+--------------------------------------------------------------------------------
+
+Chaque PII renvoyee par POST /documents/analyser a un champ "confiance", un
+nombre entre 0 et 1 qui dit a quel point la detection est fiable. Il sert a
+repérer les passages a relire en priorite.
+
+Qui donne la confiance :
+- Expressions regulieres : toujours 1.0. Leurs formats sont surs (email,
+  telephone, IBAN et NIR a cle de controle, plaques...).
+- LLM : c'est le modele qui juge, sur demande du prompt, avec une valeur entre
+  0 et 1 (proche de 1 : sur ; vers 0,5 : ambigu ; proche de 0 : il hesite).
+
+Verification de la reponse du LLM (securite F5) :
+- Confiance absente pour une entite : l'entite est gardee avec la valeur par
+  defaut 0,5, pour ne jamais perdre une PII a cause d'un champ oublie.
+- Confiance invalide (texte, nombre hors de 0 a 1, booleen...) : la reponse du
+  LLM est rejetee comme toute reponse mal formee, et l'API continue avec les
+  expressions regulieres seules (mode degrade).
+- Un champ inconnu dans une entite reste refuse.
+
+Doublons entre detecteurs : si deux detections se chevauchent, on garde celle de
+plus haute confiance ; a confiance egale, celle qui commence en premier, puis la
+plus longue. Une expression reguliere (1.0) l'emporte donc sur le LLM.
+
+Regle importante : la confiance INFORME, elle ne decide jamais de ce qui est
+caviarde. Toutes les PII detectees sont caviardees, meme avec une confiance
+basse. Sinon, un document pourrait demander au LLM de donner une confiance de 0
+a ses propres donnees pour echapper au caviardage.
+
+Limite : la confiance du LLM est une auto-evaluation du modele, pas une
+probabilite mesuree. Elle est utile pour reperer les cas ambigus, mais un LLM
+peut se tromper avec assurance.
 
 
 --------------------------------------------------------------------------------
@@ -372,6 +422,9 @@ Pas encore disponible :
   journalise, mais le traitement continue ; pas encore de tests adversariaux
 
 Comportements a connaitre :
+- la confiance des PII du LLM est celle qu'il s'attribue lui-meme (voir 9 bis) ;
+  celle des expressions regulieres est toujours 1.0, y compris pour les formats
+  les plus larges (anciennes plaques d'immatriculation par exemple)
 - le jeton dure 30 minutes et n'est pas reverifie en base : un compte desactive
   garde son acces jusqu'a l'expiration du jeton
 - /journaux affiche l'identifiant numerique de l'utilisateur, pas son login

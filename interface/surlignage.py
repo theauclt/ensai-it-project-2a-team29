@@ -72,14 +72,20 @@ def pii_surlignables(contenu: str, pii: list[dict]) -> list[dict]:
     return retenues
 
 
+def libelle_confiance(confiance: float | None) -> str:
+    """Confiance affichée en pourcentage (« 95 % »), ou un tiret si l'API ne la fournit pas."""
+    return "—" if confiance is None else f"{round(100 * confiance)} %"
+
+
 def texte_surligne_html(contenu: str, pii: list[dict]) -> str:
     """Renvoie le texte en HTML, chaque PII surlignée et suivie de son type en petit."""
     morceaux = []
     position = 0
     for p in pii_surlignables(contenu, pii):
         morceaux.append(html.escape(contenu[position : p["debut"]]))
+        titre = f"Confiance : {libelle_confiance(p.get('confiance'))}"
         morceaux.append(
-            f'<mark class="an-pii">{html.escape(contenu[p["debut"] : p["fin"]])}'
+            f'<mark class="an-pii" title="{html.escape(titre)}">{html.escape(contenu[p["debut"] : p["fin"]])}'
             f"<sup>{html.escape(libelle(p['type']))}</sup></mark>"
         )
         position = p["fin"]
@@ -103,19 +109,20 @@ def types_html(pii: list[dict]) -> str:
 
 
 def tableau_pii_html(pii: list[dict]) -> str:
-    """Tableau des PII détectées : texte, type, détecteur et position dans le document."""
+    """Tableau des PII détectées : texte, type, détecteur, confiance et position dans le document."""
     lignes = "".join(
         "<tr>"
         f'<td class="id">{html.escape(p["texte"])}</td>'
         f"<td>{html.escape(libelle(p['type']))}</td>"
         f"<td>{html.escape(libelle_detecteur(p['detecteur']))}</td>"
+        f'<td class="droite">{libelle_confiance(p.get("confiance"))}</td>'
         f'<td class="droite">{_nombre(p["debut"])}–{_nombre(p["fin"])}</td>'
         "</tr>"
         for p in sorted(pii, key=lambda p: p["debut"])
     )
     return (
         '<div class="an-defile"><table class="an-tableau"><thead><tr>'
-        '<th style="width:40%">Texte détecté</th><th>Type</th><th>Détecteur</th><th class="droite">Position</th>'
+        '<th style="width:40%">Texte détecté</th><th>Type</th><th>Détecteur</th><th class="droite">Confiance</th><th class="droite">Position</th>'
         f"</tr></thead><tbody>{lignes}</tbody></table></div>"
     )
 
