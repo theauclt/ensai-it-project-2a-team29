@@ -1,4 +1,5 @@
 import asyncio
+import bisect
 import hashlib
 import logging
 from datetime import UTC, datetime
@@ -137,15 +138,23 @@ class DetectionService:
         """
         Supprime les chevauchements entre spans.
 
-        Règle : on garde le span qui commence en premier, et à début égal
-        le plus long. Les spans qui empiètent sur un span déjà gardé sont écartés.
-        """
-        merged: list[PIISpan] = []
-        last_end = 0  # fin du dernier span gardé
+        Règle : on garde d'abord les spans de plus forte confiance ; à confiance égale,
+        celui qui commence en premier, et à début égal le plus long. Un span qui empiète
+        sur un span déjà gardé est écarté. Le résultat est trié par position.
 
-        # tri par début croissant, puis par longueur décroissante
-        for span in sorted(spans, key=lambda s: (s.start, -(s.end - s.start))):
-            if span.start >= last_end:  # aucun chevauchement avec le dernier gardé
-                merged.append(span)
-                last_end = span.end
-        return merged
+        La confiance sert seulement à départager deux détections incompatibles : aucune
+        PII n'est écartée parce que sa confiance est basse.
+        """
+        kept: list[PIISpan] = []
+        starts: list[int] = []  # débuts des spans gardés, triés (kept reste trié comme starts)
+
+        for span in sorted(spans, key=lambda s: (-s.confidence, s.start, -(s.end - s.start))):
+            i = bisect.bisect_left(starts, span.start)
+            # les spans gardés ne se chevauchent pas : seuls les voisins immédiats comptent
+            if i > 0 and kept[i - 1].end > span.start:
+                continue
+            if i < len(kept) and kept[i].start < span.end:
+                continue
+            kept.insert(i, span)
+            starts.insert(i, span.start)
+        return kept

@@ -33,7 +33,12 @@ async def analyser(
         types_injection=service.injection_types(body.contenu),
         pii=[
             PIIResponse(
-                texte=s.text, type=s.type, debut=s.start, fin=s.end, detecteur=s.source_detector
+                texte=s.text,
+                type=s.type,
+                debut=s.start,
+                fin=s.end,
+                detecteur=s.source_detector,
+                confiance=s.confidence,
             )
             for s in spans
         ]
