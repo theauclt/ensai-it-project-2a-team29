@@ -77,3 +77,24 @@ def test_traitements_sans_llm():
 
     assert synthese["sans_llm"] == 2
     assert synthese["part_sans_llm"] == 50
+
+
+def test_maximum_et_tranches():
+    traitements = [traitement(1, 10, nb=0), traitement(1, 10, nb=2), traitement(1, 10, nb=3), traitement(1, 10, nb=11)]
+
+    synthese = journal.tableau_de_bord(traitements, {}, TZ)
+
+    assert synthese["pii_max"] == 11
+    assert synthese["par_tranche"] == {"0": 1, "1 à 2": 1, "3 à 5": 1, "6 à 10": 0, "Plus de 10": 1}
+
+
+def test_detail_par_utilisateur():
+    traitements = [traitement(1, 10, nb=2), traitement(1, 12, nb=4), traitement(2, 11, nb=6)]
+
+    detail = journal.tableau_de_bord(traitements, {1: "alice"}, TZ)["detail_utilisateurs"]
+
+    assert [ligne["Utilisateur"] for ligne in detail] == ["alice", "n°2"]
+    assert detail[0]["Traitements"] == 2
+    assert detail[0]["Données détectées"] == 6
+    assert detail[0]["Moyenne par document"] == 3.0
+    assert detail[0]["Dernier traitement"].day == 12

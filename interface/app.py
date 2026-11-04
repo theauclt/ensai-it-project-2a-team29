@@ -9,16 +9,18 @@ quelles pages afficher selon l'utilisateur connecté, puis lance la page choisie
 """
 import session
 import streamlit as st
+import theme
 
 # Doit être le tout premier appel Streamlit du script
-st.set_page_config(page_title="Anonymia", page_icon="🔒", layout="wide")
+st.set_page_config(page_title="Anonymia", page_icon=":material/description:", layout="wide")
+theme.appliquer()
 
 # Les chemins des pages sont relatifs à ce fichier
-page_connexion = st.Page("vues/connexion.py", title="Connexion", icon="🔑")
-page_caviardage = st.Page("vues/caviardage.py", title="Caviardage", icon="✂️", default=True)
-page_tableau_de_bord = st.Page("vues/tableau_de_bord.py", title="Tableau de bord", icon="📊")
-page_historique = st.Page("vues/historique.py", title="Historique", icon="📜")
-page_administration = st.Page("vues/administration.py", title="Administration", icon="👥")
+page_connexion = st.Page("vues/connexion.py", title="Connexion", icon=":material/login:")
+page_caviardage = st.Page("vues/caviardage.py", title="Caviardage", icon=":material/ink_eraser:", default=True)
+page_tableau_de_bord = st.Page("vues/tableau_de_bord.py", title="Tableau de bord", icon=":material/monitoring:")
+page_historique = st.Page("vues/historique.py", title="Historique", icon=":material/history:")
+page_administration = st.Page("vues/administration.py", title="Administration", icon=":material/group:")
 
 utilisateur = session.courante()
 
@@ -28,16 +30,24 @@ else:
     # Page ouverte à tous les utilisateurs connectés
     pages = [page_caviardage]
     # Pages réservées à certains rôles (l'API contrôle aussi les droits : ici, c'est de l'affichage)
+    suivi = []
     if utilisateur["role"] in session.ROLES_HISTORIQUE:
-        pages.append(page_tableau_de_bord)
-        pages.append(page_historique)
+        suivi += [page_tableau_de_bord, page_historique]
     if utilisateur["role"] in session.ROLES_ADMINISTRATION:
-        pages.append(page_administration)
+        suivi.append(page_administration)
+    pages += suivi
 
+    # Barre latérale dessinée par l'application (le menu automatique de Streamlit est masqué)
     with st.sidebar:
-        st.caption(f"Connecté : **{utilisateur['login']}** ({utilisateur['role']})")
-        if st.button("Se déconnecter"):
+        theme.produit()
+        st.page_link(page_caviardage)
+        if suivi:
+            st.html('<div class="an-groupe">Suivi</div>')
+            for page in suivi:
+                st.page_link(page)
+        theme.compte(utilisateur["login"], utilisateur["role"])
+        if st.button("Se déconnecter", type="tertiary", icon=":material/logout:"):
             session.deconnecter()
             st.rerun()
 
-st.navigation(pages).run()
+st.navigation(pages, position="hidden").run()
