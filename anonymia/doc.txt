@@ -359,6 +359,10 @@ ADMIN_LOGIN et ADMIN_PASSWORD, ou avec scripts/create_user.py).
 
 Pas encore disponible :
 - deconnexion cote API (l'interface Streamlit propose un bouton "Se deconnecter")
+- modification du mot de passe : un utilisateur ne peut pas changer le sien,
+  et l'administrateur ne peut pas le reinitialiser (le mot de passe fixe a la
+  creation du compte reste valable ; pour le renouveler, supprimer et recreer
+  le compte). Hors du perimetre demande par le cahier des charges (F1)
 - revocation immediate des jetons (voir H2)
 - detail d'un traitement (/journaux/{id})
 - repartition des donnees detectees par type (nom, email, IBAN...) dans le
