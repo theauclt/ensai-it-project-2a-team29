@@ -106,6 +106,51 @@ def statistiques(traitements: list[dict], tz: tzinfo) -> dict:
     }
 
 
+def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo) -> dict:
+    """
+    Agrégats de la page Tableau de bord, calculés sur les traitements renvoyés par l'API.
+
+    Les répartitions (par utilisateur, stratégie, détecteurs) sont triées de la plus grande à la plus
+    petite. « sans_llm » compte les traitements où le LLM n'a pas contribué : mode dégradé (LLM en
+    panne) ou application lancée avec LLM_ENABLED=false.
+    """
+    base = statistiques(traitements, tz)
+    total = base["traitements"]
+
+    par_utilisateur: dict[str, int] = {}
+    par_strategie: dict[str, int] = {}
+    par_detecteurs: dict[str, int] = {}
+    sans_llm = 0
+    for t in traitements:
+        nom = logins.get(t["user_id"]) or f"n°{t['user_id']}"
+        par_utilisateur[nom] = par_utilisateur.get(nom, 0) + 1
+
+        strategie = _STRATEGIES.get(t["strategie_anonymisation"], t["strategie_anonymisation"])
+        par_strategie[strategie] = par_strategie.get(strategie, 0) + 1
+
+        libelle = libelle_detecteurs(t["detecteurs_contributeurs"])
+        par_detecteurs[libelle] = par_detecteurs.get(libelle, 0) + 1
+
+        if "LLMDetector" not in t["detecteurs_contributeurs"].split(","):
+            sans_llm += 1
+
+    def trier(repartition: dict[str, int]) -> dict[str, int]:
+        return dict(sorted(repartition.items(), key=lambda element: (-element[1], element[0])))
+
+    return {
+        "traitements": total,
+        "pii": base["pii"],
+        "utilisateurs": base["utilisateurs"],
+        "pii_moyenne": round(base["pii"] / total, 1) if total else 0.0,
+        "sans_llm": sans_llm,
+        "part_sans_llm": round(100 * sans_llm / total) if total else 0,
+        "par_jour": base["par_jour"],
+        "par_utilisateur": trier(par_utilisateur),
+        "par_strategie": trier(par_strategie),
+        "par_detecteurs": trier(par_detecteurs),
+    }
+
+
 def _proteger(valeur):
     """
     Neutralise l'injection de formules : Excel exécute une cellule texte qui commence par = + - @.

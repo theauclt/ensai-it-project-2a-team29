@@ -16,6 +16,7 @@ st.set_page_config(page_title="Anonymia", page_icon="🔒", layout="wide")
 # Les chemins des pages sont relatifs à ce fichier
 page_connexion = st.Page("vues/connexion.py", title="Connexion", icon="🔑")
 page_caviardage = st.Page("vues/caviardage.py", title="Caviardage", icon="✂️", default=True)
+page_tableau_de_bord = st.Page("vues/tableau_de_bord.py", title="Tableau de bord", icon="📊")
 page_historique = st.Page("vues/historique.py", title="Historique", icon="📜")
 page_administration = st.Page("vues/administration.py", title="Administration", icon="👥")
 
@@ -28,6 +29,7 @@ else:
     pages = [page_caviardage]
     # Pages réservées à certains rôles (l'API contrôle aussi les droits : ici, c'est de l'affichage)
     if utilisateur["role"] in session.ROLES_HISTORIQUE:
+        pages.append(page_tableau_de_bord)
         pages.append(page_historique)
     if utilisateur["role"] in session.ROLES_ADMINISTRATION:
         pages.append(page_administration)
