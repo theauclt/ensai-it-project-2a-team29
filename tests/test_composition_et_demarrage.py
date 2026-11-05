@@ -77,7 +77,7 @@ def demarrage(monkeypatch):
     monkeypatch.setattr(main, "build_archive_repository", FakeArchiveRepository)
     monkeypatch.setattr(main, "build_user_repository", lambda: users)
     monkeypatch.setattr(
-        main, "build_detection_service", lambda archive, with_llm: FauxDetection()
+        main, "build_detection_service", lambda archive, with_llm, with_ner: FauxDetection()
     )
     monkeypatch.setattr(main, "build_history_service", lambda a, u: SimpleNamespace())
     monkeypatch.setattr(main, "build_admin_service", lambda u: SimpleNamespace())
@@ -118,7 +118,7 @@ def test_llm_desactive_par_variable_d_environnement(demarrage, monkeypatch):
     monkeypatch.setattr(
         main,
         "build_detection_service",
-        lambda archive, with_llm: recu.setdefault("with_llm", with_llm)
+        lambda archive, with_llm, with_ner: recu.setdefault("with_llm", with_llm)
         or SimpleNamespace(aclose=_noop),
     )
     monkeypatch.setenv("LLM_ENABLED", "false")
