@@ -7,8 +7,8 @@ import httpx
 # L'interface n'est pas un paquet : on ajoute son dossier au chemin, comme le fait Streamlit
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "interface"))
 
-import journal  # noqa: E402
-from api_client import ApiClient  # noqa: E402
+import journal
+from api_client import ApiClient
 
 TZ = ZoneInfo("UTC")
 

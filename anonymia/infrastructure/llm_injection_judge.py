@@ -6,7 +6,6 @@ import httpx
 from ..service.business_objects.injection_verdict import InjectionVerdict
 from ..service.interfaces.injection_judge import InjectionJudge
 
-
 logger = logging.getLogger(__name__)
 
 ALLOWED_INJECTION_TYPES = frozenset({
@@ -187,7 +186,7 @@ class LLMInjectionJudge(InjectionJudge):
         data = json.loads(content)
 
         if not isinstance(data, dict):
-            raise ValueError("La réponse doit être un objet JSON.")
+            raise TypeError("La réponse doit être un objet JSON.")
 
         if set(data) != {"status", "injection_type", "explication"}:
             raise ValueError("Champs du verdict invalides.")

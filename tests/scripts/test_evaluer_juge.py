@@ -30,6 +30,11 @@ def corpus_minimal(tmp_path):
     return tmp_path
 
 
+def lire_csv(chemin):
+    with open(chemin, encoding="utf-8", newline="") as f:
+        return list(csv.reader(f))
+
+
 class JugeScripte(InjectionJudge):
     """Répond selon des mots-clés : `detecte` donne « detected », `indisponible` fait échouer le juge."""
 
@@ -89,7 +94,7 @@ async def test_rapport_et_fichiers(tmp_path):
     assert "Attaques détectées | 1 / 2 (50.0 %)" in rapport
     assert "ne prouve pas" in rapport
     assert (tmp_path / "sortie/metriques_juge.json").exists()
-    lignes = list(csv.reader(open(tmp_path / "sortie/erreurs_juge.csv", encoding="utf-8")))
+    lignes = lire_csv(tmp_path / "sortie/erreurs_juge.csv")
     assert ["a2.txt", "attaque_manquee", "paraphrase_indirecte"] in lignes
 
 
@@ -113,4 +118,3 @@ async def test_le_rapport_normal_n_a_pas_cet_avertissement(tmp_path):
     r = await evaluer_juge.evaluer(corpus_minimal(tmp_path), JugeScripte(detecte=["Ignore previous"]))
 
     assert "inexploitable" not in evaluer_juge.rapport_markdown(r)
-

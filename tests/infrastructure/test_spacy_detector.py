@@ -1,5 +1,3 @@
-from anonymia.service.prompt_injector_detector import PromptInjectionDetector
-
 import importlib.util
 from types import SimpleNamespace
 
@@ -13,6 +11,7 @@ from anonymia.infrastructure.spacy_detector import (
     SpacyModeleIntrouvableError,
 )
 from anonymia.service.detection_service import DetectionService
+from anonymia.service.prompt_injector_detector import PromptInjectionDetector
 from tests.fakes import FakeArchiveRepository
 
 TEXTE = "Claire Martin habite à Rennes et travaille chez Durand SA. Contact : claire@mail.fr"

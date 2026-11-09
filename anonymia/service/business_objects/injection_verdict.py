@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Literal, get_args
 
-
 InjectionType = Literal[
     "ignore_instructions",
     "role_manipulation",

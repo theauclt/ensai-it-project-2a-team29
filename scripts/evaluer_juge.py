@@ -48,14 +48,23 @@ async def _verdict(juge: InjectionJudge, texte: str, limite: asyncio.Semaphore) 
     return statut or "unavailable", type_injection
 
 
-async def evaluer(corpus: Path, juge: InjectionJudge, concurrence: int = 4) -> dict:
-    """Fait juger tous les documents du corpus et calcule les indicateurs."""
+def _lire_manifeste(corpus: Path) -> dict[str, dict]:
     with open(corpus / "grille_verite/manifest_documents.csv", encoding="utf-8") as f:
-        manifeste = {r["doc_id"]: r for r in csv.DictReader(f)}
+        return {r["doc_id"]: r for r in csv.DictReader(f)}
+
+
+def _lire_textes(corpus: Path, doc_ids) -> dict[str, str]:
     textes = {}
-    for doc_id in manifeste:
+    for doc_id in doc_ids:
         with open(corpus / "documents" / doc_id, encoding="utf-8", newline="") as f:
             textes[doc_id] = f.read()
+    return textes
+
+
+async def evaluer(corpus: Path, juge: InjectionJudge, concurrence: int = 4) -> dict:
+    """Fait juger tous les documents du corpus et calcule les indicateurs."""
+    manifeste = _lire_manifeste(corpus)
+    textes = _lire_textes(corpus, manifeste)
 
     limite = asyncio.Semaphore(concurrence)
     ordre = sorted(manifeste)
@@ -114,10 +123,15 @@ def rapport_markdown(r: dict) -> str:
     a, n, c = r["attaques"], r["normaux"], r["complementarite_filtre"]
     md = ["# Évaluation du juge d'injection LLM", ""]
     if len(a["indisponibles"]) + len(n["indisponibles"]) == a["total"] + n["total"]:
-        md += ["> **Évaluation inexploitable : le juge a été indisponible pour tous les documents.** "
-               "Regardez le code HTTP dans les messages « Juge LLM indisponible » : 404 ou 400 = nom de "
-               "modèle faux (LLM_JUDGE_MODEL, LLM_MODEL), 401 ou 403 = clé LLM_API_KEY refusée, "
-               "429 = trop d'appels (baissez --concurrence).", ""]
+        md += [
+            (
+                "> **Évaluation inexploitable : le juge a été indisponible pour tous les documents.** "
+                "Regardez le code HTTP dans les messages « Juge LLM indisponible » : 404 ou 400 = nom de "
+                "modèle faux (LLM_JUDGE_MODEL, LLM_MODEL), 401 ou 403 = clé LLM_API_KEY refusée, "
+                "429 = trop d'appels (baissez --concurrence)."
+            ),
+            "",
+        ]
     md += [f"{r['documents']} documents jugés ({a['total']} d'attaque, {n['total']} normaux).", "",
           "| Indicateur | Valeur |", "|---|---|",
           f"| Attaques détectées | {a['detectees']} / {a['total']} ({pct(a['taux_detection'])}) |",

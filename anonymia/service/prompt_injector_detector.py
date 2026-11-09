@@ -170,7 +170,7 @@ def normalize(text: str) -> str:
     """
     Rend le texte comparable : minuscules, sans accents, sans caractères
     invisibles (espace de largeur nulle...), apostrophes droites, espaces réduits.
-    Contourne les astuces du type « ig​nore » ou « Ignorez  les  consignes ».
+    Contourne les astuces du type « ig\u200bnore » ou « Ignorez  les  consignes ».
     """
     text = unicodedata.normalize("NFKD", text)
     text = "".join(

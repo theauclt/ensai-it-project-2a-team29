@@ -102,14 +102,31 @@ def construire_service(avec_llm: bool) -> DetectionService:
     )
 
 
+def _lire_csv(chemin: Path) -> list[dict]:
+    with open(chemin, encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def _lire_texte(chemin: Path) -> str:
+    with open(chemin, encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _ecrire_csv(chemin: Path, entete: list[str], lignes: list[list]) -> None:
+    with open(chemin, "w", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(entete)
+        w.writerows(lignes)
+
+
 async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
     docs_dir = corpus / "documents"
     manifest = {
         r["doc_id"]: r
-        for r in csv.DictReader(open(corpus / "grille_verite/manifest_documents.csv", encoding="utf-8"))
+        for r in _lire_csv(corpus / "grille_verite/manifest_documents.csv")
     }
     verite: dict[str, list[dict]] = defaultdict(list)
-    for r in csv.DictReader(open(corpus / "grille_verite/ground_truth_spans.csv", encoding="utf-8")):
+    for r in _lire_csv(corpus / "grille_verite/ground_truth_spans.csv"):
         verite[r["doc_id"]].append(
             {**r, "start": int(r["start"]), "end": int(r["end"]), "cercle": int(r["cercle"])}
         )
@@ -129,8 +146,7 @@ async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
 
     for doc_id in sorted(manifest):
         meta = manifest[doc_id]
-        with open(docs_dir / doc_id, encoding="utf-8", newline="") as f:
-            texte = f.read()
+        texte = _lire_texte(docs_dir / doc_id)
         gold = verite.get(doc_id, [])
         for g in gold:
             assert texte[g["start"]: g["end"]] == g["text"], f"grille incohérente : {doc_id}"
@@ -243,14 +259,16 @@ async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
         "faux_positifs_docs": [d for d, _, _, c in normaux if c],
     }
     (sortie / "metriques.json").write_text(json.dumps(resultats, ensure_ascii=False, indent=2), encoding="utf-8")
-    with open(sortie / "details_par_document.csv", "w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["doc_id", "type_document", "longueur", "nb_pii_attendues", "tp", "fp", "fn"])
-        w.writerows(details)
-    with open(sortie / "erreurs.csv", "w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["doc_id", "erreur", "type", "texte", "detecteur", "type_document"])
-        w.writerows(erreurs)
+    _ecrire_csv(
+        sortie / "details_par_document.csv",
+        ["doc_id", "type_document", "longueur", "nb_pii_attendues", "tp", "fp", "fn"],
+        details,
+    )
+    _ecrire_csv(
+        sortie / "erreurs.csv",
+        ["doc_id", "erreur", "type", "texte", "detecteur", "type_document"],
+        erreurs,
+    )
 
     md = [f"# Évaluation sur le corpus de test ({resultats['pipeline']})", ""]
     g, gs = resultats["global"], resultats["global_strict"]

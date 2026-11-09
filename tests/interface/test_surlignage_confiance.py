@@ -4,7 +4,7 @@ from pathlib import Path
 # L'interface n'est pas un paquet : on ajoute son dossier au chemin, comme le fait Streamlit
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "interface"))
 
-import surlignage  # noqa: E402
+import surlignage
 
 PII = [{"texte": "Martin", "type": "NOM", "debut": 0, "fin": 6, "detecteur": "LLMDetector", "confiance": 0.95}]
 

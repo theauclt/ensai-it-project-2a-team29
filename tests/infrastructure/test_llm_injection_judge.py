@@ -1,9 +1,9 @@
-import pytest
-import httpx
 import json
 
-from anonymia.infrastructure.llm_injection_judge import LLMInjectionJudge
+import httpx
+import pytest
 
+from anonymia.infrastructure.llm_injection_judge import LLMInjectionJudge
 
 # ===========================================================
 # 1. RÉPONSES JSON VALIDES
@@ -52,10 +52,7 @@ def test_parse_response_no_injection():
 
 
 
-import httpx
-import pytest
 
-from anonymia.infrastructure.llm_injection_judge import LLMInjectionJudge
 
 # ============================================================
 # 2. RÉPONSES JSON INVALIDES

@@ -4,7 +4,7 @@ from pathlib import Path
 # L'interface n'est pas un paquet : on ajoute son dossier au chemin, comme le fait Streamlit
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "interface"))
 
-import graphiques  # noqa: E402
+import graphiques
 
 
 def test_les_graphiques_se_construisent():

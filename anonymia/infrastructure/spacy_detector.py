@@ -4,9 +4,8 @@
 
 import asyncio
 import threading
+
 # threading sert à gérer les fils d'execution différemment de asyncio
-
-
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.pii_detector import PIIDetector
 
