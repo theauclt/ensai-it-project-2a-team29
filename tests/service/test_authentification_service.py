@@ -1,152 +1,98 @@
-from unittest.mock import AsyncMock
-
+"""
+Authentification : aucun échec ne doit se distinguer d'un autre (audit ER3-01).
+Même travail (un calcul bcrypt) et même réponse pour un login inconnu, un compte désactivé,
+un mauvais mot de passe, un mot de passe de plus de 72 octets ou une empreinte invalide.
+"""
 import bcrypt
 import pytest
 
-from anonymia.service.authentification_service import AuthentificationService
+from anonymia.service import authentification_service as module
+from anonymia.service.authentification_service import (
+    MOT_DE_PASSE_MAX_OCTETS,
+    AuthentificationService,
+)
 from anonymia.service.business_objects.user import User
+from anonymia.service.mots_de_passe import hasher_mot_de_passe
+from tests.fakes import FakeUserRepository
 
 
-@pytest.fixture
-def user_repository():
-    return AsyncMock()
-
-
-@pytest.fixture
-def authentification_service(user_repository):
-    return AuthentificationService(user_repository)
-
-
-@pytest.fixture
-def user():
-    password = "motdepasse123"
-    password_hash = bcrypt.hashpw(
-        password.encode("utf-8"),
-        bcrypt.gensalt(),
-    ).decode("utf-8")
-
+def make_user(mot_de_passe="motdepasse123", est_active=True, password_hash=None):
     return User(
-        id="123",
-        login="test_user",
-        password_hash=password_hash,
-        role="utilisateur",
-        est_active=True,
+        id=1,
+        login="alice",
+        password_hash=password_hash or hasher_mot_de_passe(mot_de_passe),
+        role="USER",
+        est_active=est_active,
     )
 
 
-@pytest.mark.asyncio
-async def test_authentification_reussie(
-    user_repository,
-    authentification_service,
-    user,
-):
-    # GIVEN
-    user_repository.find_by_login.return_value = user
+@pytest.fixture
+def appels_bcrypt(monkeypatch):
+    """Compte les appels à bcrypt.checkpw faits par le service."""
+    appels = []
+    vrai_checkpw = bcrypt.checkpw
 
-    # WHEN
-    result = await authentification_service.authentifier(
-        "test_user",
-        "motdepasse123",
+    def espion(mot_de_passe, empreinte):
+        appels.append(empreinte)
+        return vrai_checkpw(mot_de_passe, empreinte)
+
+    monkeypatch.setattr(module.bcrypt, "checkpw", espion)
+    return appels
+
+
+async def test_connexion_reussie():
+    service = AuthentificationService(FakeUserRepository([make_user()]))
+
+    assert (await service.authentifier("alice", "motdepasse123")).login == "alice"
+
+
+async def test_un_login_inconnu_fait_quand_meme_un_calcul_bcrypt(appels_bcrypt):
+    service = AuthentificationService(FakeUserRepository())
+
+    assert await service.authentifier("inconnu", "motdepasse123") is None
+    assert len(appels_bcrypt) == 1
+
+
+async def test_un_compte_desactive_fait_quand_meme_un_calcul_bcrypt(appels_bcrypt):
+    service = AuthentificationService(FakeUserRepository([make_user(est_active=False)]))
+
+    assert await service.authentifier("alice", "motdepasse123") is None
+    assert len(appels_bcrypt) == 1
+
+
+async def test_un_mauvais_mot_de_passe_est_refuse():
+    service = AuthentificationService(FakeUserRepository([make_user()]))
+
+    assert await service.authentifier("alice", "autre-mot-de-passe") is None
+
+
+@pytest.mark.parametrize("login", ["alice", "inconnu"])
+async def test_un_mot_de_passe_de_plus_de_72_octets_est_un_simple_echec(login):
+    # bcrypt 5 lève une exception : elle ne doit pas devenir une erreur 500 (ni révéler le compte)
+    service = AuthentificationService(FakeUserRepository([make_user()]))
+    trop_long = "é" * 40  # 40 caractères mais 80 octets
+
+    assert await service.authentifier(login, trop_long) is None
+
+
+async def test_une_empreinte_invalide_en_base_est_un_simple_echec():
+    service = AuthentificationService(
+        FakeUserRepository([make_user(password_hash="pas-une-empreinte-bcrypt")])
     )
 
-    # THEN
-    assert result is user
-    user_repository.find_by_login.assert_awaited_once_with("test_user")
+    assert await service.authentifier("alice", "motdepasse123") is None
 
 
-@pytest.mark.asyncio
-async def test_authentification_utilisateur_inexistant(
-    user_repository,
-    authentification_service,
-):
-    # GIVEN
-    user_repository.find_by_login.return_value = None
+async def test_admin_initial_refuse_un_mot_de_passe_de_plus_de_72_octets():
+    service = AuthentificationService(FakeUserRepository())
 
-    # WHEN
-    result = await authentification_service.authentifier(
-        "inexistant",
-        "motdepasse123",
-    )
-
-    # THEN
-    assert result is None
-    user_repository.find_by_login.assert_awaited_once_with("inexistant")
+    with pytest.raises(ValueError, match="trop long"):
+        await service.creer_admin_initial("root", "a" * (MOT_DE_PASSE_MAX_OCTETS + 1))
 
 
-@pytest.mark.asyncio
-async def test_authentification_mauvais_mot_de_passe(
-    user_repository,
-    authentification_service,
-    user,
-):
-    # GIVEN
-    user_repository.find_by_login.return_value = user
+async def test_admin_initial_accepte_exactement_72_octets():
+    depot = FakeUserRepository()
+    service = AuthentificationService(depot)
 
-    # WHEN
-    result = await authentification_service.authentifier(
-        "test_user",
-        "mauvais_mot_de_passe",
-    )
-
-    # THEN
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_authentification_compte_desactive(
-    user_repository,
-    authentification_service,
-    user,
-):
-    # GIVEN
-    user.est_active = False
-    user_repository.find_by_login.return_value = user
-
-    # WHEN
-    result = await authentification_service.authentifier(
-        "test_user",
-        "motdepasse123",
-    )
-
-    # THEN
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_creer_admin_initial_cree_le_compte():
-    from tests.fakes import FakeUserRepository
-
-    repo = FakeUserRepository()
-    service = AuthentificationService(repo)
-
-    assert await service.creer_admin_initial("admin", "motdepasse123") is True
-
-    admin = repo.users["admin"]
-    assert admin.role == "ADMIN"
-    assert admin.password_hash != "motdepasse123"
-    assert await service.authentifier("admin", "motdepasse123") is admin
-
-
-@pytest.mark.asyncio
-async def test_creer_admin_initial_est_idempotent():
-    from tests.fakes import FakeUserRepository
-
-    repo = FakeUserRepository()
-    service = AuthentificationService(repo)
-    await service.creer_admin_initial("admin", "motdepasse123")
-    hash_initial = repo.users["admin"].password_hash
-
-    assert await service.creer_admin_initial("admin", "autremotdepasse") is False
-    assert repo.users["admin"].password_hash == hash_initial
-
-
-@pytest.mark.asyncio
-async def test_creer_admin_initial_refuse_mot_de_passe_trop_court():
-    from tests.fakes import FakeUserRepository
-
-    repo = FakeUserRepository()
-    service = AuthentificationService(repo)
-
-    with pytest.raises(ValueError):
-        await service.creer_admin_initial("admin", "court")
-    assert repo.users == {}
+    assert await service.creer_admin_initial("root", "a" * MOT_DE_PASSE_MAX_OCTETS) is True
+    assert "root" in depot.users

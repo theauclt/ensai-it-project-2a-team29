@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from ..service.authentification_service import MOT_DE_PASSE_MAX_OCTETS
+
+
+def _verifier_longueur_bcrypt(mot_de_passe: str) -> str:
+    """bcrypt compte en octets : 40 lettres accentuées font déjà 80 octets."""
+    if len(mot_de_passe.encode("utf-8")) > MOT_DE_PASSE_MAX_OCTETS:
+        raise ValueError(f"Mot de passe trop long ({MOT_DE_PASSE_MAX_OCTETS} octets maximum)")
+    return mot_de_passe
 
 
 class LoginRequest(BaseModel):
@@ -9,6 +18,9 @@ class LoginRequest(BaseModel):
 
     login: str
     mot_de_passe: str
+
+    # Même refus (422) pour tous les logins : la longueur ne révèle pas si un compte existe
+    _longueur_mot_de_passe = field_validator("mot_de_passe")(_verifier_longueur_bcrypt)
 
 
 class TokenResponse(BaseModel):
@@ -88,7 +100,8 @@ class TraitementResponse(BaseModel):
     """Métadonnées d'un traitement : jamais le contenu du document ni les PII."""
 
     id: int
-    user_id: int
+    # None quand le compte auteur a été supprimé : la trace d'audit est conservée
+    user_id: int | None = None
     date_traitement: datetime
     hash_document: str
     strategie_anonymisation: str
@@ -107,6 +120,8 @@ class CreerUtilisateurRequest(BaseModel):
     login: str = Field(min_length=1, max_length=255)
     mot_de_passe: str = Field(min_length=1, max_length=128)
     role: str
+
+    _longueur_mot_de_passe = field_validator("mot_de_passe")(_verifier_longueur_bcrypt)
 
 
 class ChangerRoleRequest(BaseModel):
@@ -129,4 +144,3 @@ class UtilisateurResponse(BaseModel):
     role: str
     est_active: bool
     date_creation: datetime | None = None
-

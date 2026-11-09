@@ -9,6 +9,8 @@ from ..service.business_objects.user import User
 
 ALGORITHM = "HS256"
 DUREE_JETON = timedelta(minutes=30)
+# RFC 8725 : la clé HMAC doit être au moins aussi longue que la signature (HS256 : 256 bits)
+SECRET_MIN_CARACTERES = 32
 
 # auto_error=False : c'est nous qui renvoyons un 401 propre (et non un 403 par défaut)
 _bearer = HTTPBearer(auto_error=False)
@@ -19,6 +21,18 @@ def _secret() -> str:
     if not secret:
         raise RuntimeError("Variable d'environnement manquante : JWT_SECRET")
     return secret
+
+
+def verifier_secret() -> None:
+    """
+    Contrôle du secret JWT au démarrage : présent et assez long pour résister à une
+    attaque hors ligne sur la signature. Générer un secret :
+        python -c "import secrets; print(secrets.token_urlsafe(48))"
+    """
+    if len(_secret()) < SECRET_MIN_CARACTERES:
+        raise RuntimeError(
+            f"JWT_SECRET trop court ({SECRET_MIN_CARACTERES} caractères minimum)"
+        )
 
 
 def create_token(user: User) -> str:

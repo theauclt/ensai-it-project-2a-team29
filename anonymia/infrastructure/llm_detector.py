@@ -104,12 +104,13 @@ class LLMInvalidResponseError(LLMDetectorError):
     """La réponse du LLM ne respecte pas le schéma attendu."""
 
 
-
 class LLMDetector(PIIDetector):
     """
     Détecte les PII dépendantes du contexte par LLM.
-    Détecte également les tentatives potentielles de prompt injection
-    avant l'appel au LLM.
+
+    Ce détecteur ne filtre pas les injections de prompt : le filtre à motifs
+    (PromptInjectionDetector) et le juge LLM sont appelés par DetectionService
+    avant lui. Sa propre défense est le prompt durci et le vérificateur de sortie.
     """
 
     def __init__(self, client: httpx.AsyncClient, model: str):
@@ -119,37 +120,27 @@ class LLMDetector(PIIDetector):
         """
         self._client = client
         self._model = model
-        
 
     async def aclose(self) -> None:
         """Ferme le client HTTP."""
         await self._client.aclose()
 
     async def detect(self, content: str) -> list[PIISpan]:
-        """
-        Détecte les données personnelles dans un document.
-        Le filtre de prompt injection est exécuté avant l'appel au LLM.
-        """
+        """Détecte les données personnelles dans un document."""
 
         if not content.strip():
             return []
 
-
-        raw = await self._call_llm(content)
-        data = self._extract_json(raw)
-        entities = self._validate_entities(data, content)
-        return self._locate_spans(entities, content)
-
-        # 2. Appel au LLM pour détecter les données personnelles
+        # 1. Appel au LLM pour détecter les données personnelles
         raw = await self._call_llm(content)
 
-        # 3. Extraction et vérification du JSON
+        # 2. Extraction et vérification du JSON
         data = self._extract_json(raw)
 
-        # 4. Validation des entités retournées
+        # 3. Validation des entités retournées
         entities = self._validate_entities(data, content)
 
-        # 5. Récupération des positions des données personnelles
+        # 4. Récupération des positions des données personnelles
         return self._locate_spans(entities, content)
 
     # ------------------------------------------------------------------

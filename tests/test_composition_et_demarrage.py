@@ -77,7 +77,9 @@ def demarrage(monkeypatch):
     monkeypatch.setattr(main, "build_archive_repository", FakeArchiveRepository)
     monkeypatch.setattr(main, "build_user_repository", lambda: users)
     monkeypatch.setattr(
-        main, "build_detection_service", lambda archive, with_llm, with_ner: FauxDetection()
+        main,
+        "build_detection_service",
+        lambda archive, **_options: FauxDetection(),
     )
     monkeypatch.setattr(main, "build_history_service", lambda a, u: SimpleNamespace())
     monkeypatch.setattr(main, "build_admin_service", lambda u: SimpleNamespace())
@@ -91,6 +93,13 @@ def test_demarrage_sans_jwt_secret_echoue(demarrage, monkeypatch):
     monkeypatch.delenv("JWT_SECRET")
 
     with pytest.raises(RuntimeError, match="JWT_SECRET"), TestClient(main.app):
+        pass
+
+
+def test_demarrage_avec_un_secret_jwt_trop_court_echoue(demarrage, monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "trop-court")
+
+    with pytest.raises(RuntimeError, match="trop court"), TestClient(main.app):
         pass
 
 
@@ -118,7 +127,7 @@ def test_llm_desactive_par_variable_d_environnement(demarrage, monkeypatch):
     monkeypatch.setattr(
         main,
         "build_detection_service",
-        lambda archive, with_llm, with_ner: recu.setdefault("with_llm", with_llm)
+        lambda archive, with_llm, **_options: recu.setdefault("with_llm", with_llm)
         or SimpleNamespace(aclose=_noop),
     )
     monkeypatch.setenv("LLM_ENABLED", "false")

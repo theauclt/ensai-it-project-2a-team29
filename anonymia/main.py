@@ -20,13 +20,13 @@ from .dependencies import (
     build_user_repository,
 )
 from .presentation.routes import routers
+from .presentation.security import verifier_secret
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Échec immédiat au démarrage plutôt qu'à la première connexion
-    if not os.environ.get("JWT_SECRET"):
-        raise RuntimeError("Variable d'environnement manquante : JWT_SECRET")
+    verifier_secret()
 
     archive_repo = build_archive_repository()
     user_repo = build_user_repository()

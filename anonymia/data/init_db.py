@@ -18,10 +18,12 @@ def init_db():
             );
         """)
 
+        # user_id peut être NULL : supprimer un compte ne supprime pas ses traces d'audit
+        # (ON DELETE SET NULL), elles restent consultables par les superviseurs.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS traitements (
                 id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                user_id INTEGER NOT NULL,
+                user_id INTEGER,
                 date_traitement TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 hash_document VARCHAR(255) NOT NULL,
                 strategie_anonymisation VARCHAR(255) NOT NULL,
@@ -35,7 +37,7 @@ def init_db():
                 CONSTRAINT fk_traitements_user
                     FOREIGN KEY (user_id)
                     REFERENCES users(id)
-                    ON DELETE CASCADE
+                    ON DELETE SET NULL
             );
         """)
         cursor.execute("""
@@ -50,6 +52,19 @@ def init_db():
             ALTER TABLE traitements
             ADD COLUMN IF NOT EXISTS juge_statut VARCHAR(20),
             ADD COLUMN IF NOT EXISTS juge_type VARCHAR(50);
+        """)
+        # Bases créées avant ce changement : on remplace la clé étrangère en cascade.
+        # Sans danger si on la relance (la contrainte est supprimée puis recréée).
+        cursor.execute("""
+            ALTER TABLE traitements ALTER COLUMN user_id DROP NOT NULL;
+        """)
+        cursor.execute("""
+            ALTER TABLE traitements DROP CONSTRAINT IF EXISTS fk_traitements_user;
+        """)
+        cursor.execute("""
+            ALTER TABLE traitements
+            ADD CONSTRAINT fk_traitements_user
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
         """)
 
     connection.commit()

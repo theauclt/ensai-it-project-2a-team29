@@ -4,6 +4,14 @@ from .business_objects.user import User
 from .interfaces.user_repository import UserRepository
 from .mots_de_passe import MOT_DE_PASSE_MIN, hasher_mot_de_passe
 
+# bcrypt ne lit que les 72 premiers octets d'un mot de passe et (version 5) refuse les plus longs
+MOT_DE_PASSE_MAX_OCTETS = 72
+
+# Empreinte d'un mot de passe quelconque, calculée une fois. Elle sert à faire le même travail
+# (un calcul bcrypt) quand le login n'existe pas : le temps de réponse ne révèle plus quels
+# comptes existent.
+_EMPREINTE_FACTICE = bcrypt.hashpw(b"empreinte-factice", bcrypt.gensalt()).decode("utf-8")
+
 
 class AuthentificationService:
     """
@@ -25,6 +33,9 @@ class AuthentificationService:
         Authentifie un utilisateur à partir de son login
         et de son mot de passe.
 
+        Le calcul bcrypt est fait dans tous les cas (login inconnu, compte désactivé, mot de
+        passe trop long) et la réponse est la même : rien ne distingue ces échecs.
+
         Returns:
             User | None: l'utilisateur si l'authentification réussit,
             sinon None.
@@ -32,16 +43,10 @@ class AuthentificationService:
 
         user = await self.__user_repository.find_by_login(login)
 
-        if user is None:
-            return None
+        empreinte = user.password_hash if user is not None else _EMPREINTE_FACTICE
+        mot_de_passe_valide = self.__verifier_mot_de_passe(mot_de_passe, empreinte)
 
-        if not user.est_active:
-            return None
-
-        if not self.__verifier_mot_de_passe(
-            mot_de_passe,
-            user.password_hash,
-        ):
+        if user is None or not user.est_active or not mot_de_passe_valide:
             return None
 
         return user
@@ -60,6 +65,10 @@ class AuthentificationService:
             raise ValueError(
                 f"ADMIN_PASSWORD trop court ({MOT_DE_PASSE_MIN} caractères minimum)"
             )
+        if len(mot_de_passe.encode("utf-8")) > MOT_DE_PASSE_MAX_OCTETS:
+            raise ValueError(
+                f"ADMIN_PASSWORD trop long ({MOT_DE_PASSE_MAX_OCTETS} octets maximum)"
+            )
         if await self.__user_repository.find_by_login(login) is not None:
             return False
 
@@ -75,16 +84,18 @@ class AuthentificationService:
     ) -> bool:
         """
         Vérifie qu'un mot de passe correspond à son hash.
+
+        bcrypt est un algorithme de hachage adapté aux mots de passe. Lors du hachage, il
+        génère automatiquement un sel aléatoire, intégré au hash stocké en base. Lors de la
+        connexion, checkpw() utilise ce sel pour vérifier le mot de passe saisi.
+
+        Une entrée que bcrypt refuse (mot de passe de plus de 72 octets, empreinte mal formée)
+        est un simple échec, jamais une erreur serveur.
         """
-
-        return bcrypt.checkpw(
-            mot_de_passe.encode("utf-8"),
-            password_hash.encode("utf-8"),
-        )
-
-        # bcrypt est un algorithme de hachage adapté aux mots de passe.
-        # Lors du hachage, il génère automatiquement un salt aléatoire,
-        # qui est intégré au hash stocké en base de données.
-        # Lors de la connexion, checkpw() utilise ce salt pour vérifier
-        # le mot de passe saisi sans jamais stocker le mot de passe en clair.
-        # penser à le mettre dans le requirement.txt
+        try:
+            return bcrypt.checkpw(
+                mot_de_passe.encode("utf-8"),
+                password_hash.encode("utf-8"),
+            )
+        except ValueError:
+            return False
