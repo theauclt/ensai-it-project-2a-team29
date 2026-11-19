@@ -41,7 +41,7 @@ class PostgresArchiveRepository(ArchiveRepository):
                 ),
             )
 
-    async def find_by_user(self, user_id: str) -> list[AuditEntry]:
+    async def find_by_user(self, user_id: int) -> list[AuditEntry]:
         # pour quand un superviseur veut filtrer par user
         query = "SELECT * FROM traitements WHERE user_id = %s"
         async with self.__pool.connection() as conn:

@@ -1,6 +1,6 @@
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
-from .text_utils import normalize_key  # CHANGEMENT 1 : était normalize_text
+from .text_utils import normalize_key
 
 
 class MaskingStrategy(AnonymisationStrategy):
@@ -14,7 +14,7 @@ class MaskingStrategy(AnonymisationStrategy):
 
     # Les trois formats de plaques partagent la même étiquette et le même compteur
     ETIQUETTES = {  # noqa: RUF012
-        "TELEPHONE": "TEL",  # CHANGEMENT 2 : ligne ajoutée
+        "TELEPHONE": "TEL",
         "PLAQUE_ACTUELLE": "PLAQUE",
         "PLAQUE_ANCIENNE": "PLAQUE",
         "PLAQUE_DIPLOMATIQUE": "PLAQUE",

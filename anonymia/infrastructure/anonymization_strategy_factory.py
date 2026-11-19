@@ -14,7 +14,10 @@ class AnonymizationStrategyFactory:
     @classmethod
     def get_strategy(cls, strategy: str) -> AnonymisationStrategy:
         """
-        blbla
+        Construit la stratégie d'anonymisation demandée ("masking" ou "pseudonymization").
+
+        Lève ValueError si le nom est inconnu : DetectionService la sollicite avant tout
+        appel au LLM, pour échouer tout de suite plutôt qu'après plusieurs secondes d'attente.
         """
         if strategy == "masking":
             return MaskingStrategy()

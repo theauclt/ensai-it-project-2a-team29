@@ -18,7 +18,7 @@ class ArchiveRepository(ABC):
         """Enregistre une nouvelle entrée d'audit."""
 
     @abstractmethod
-    async def find_by_user(self, user_id: str) -> list[AuditEntry]:
+    async def find_by_user(self, user_id: int) -> list[AuditEntry]:
         """Retourne les entrées d'audit d'un utilisateur donné."""
 
     @abstractmethod
