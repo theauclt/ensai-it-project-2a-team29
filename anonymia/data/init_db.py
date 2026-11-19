@@ -1,12 +1,11 @@
 from dotenv import load_dotenv
 
-from ..persistence.dao.db_connexion import DBConnection
+from ..persistence.dao.db_connexion import connexion_synchrone
 
 
 def init_db():
-    connection = DBConnection().connection
-
-    with connection.cursor() as cursor:
+    # Le bloc `with connection` valide tout à sa sortie, ou annule tout en cas d'erreur
+    with connexion_synchrone() as connection, connection.cursor() as cursor:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -66,8 +65,6 @@ def init_db():
             ADD CONSTRAINT fk_traitements_user
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
         """)
-
-    connection.commit()
 
 
 if __name__ == "__main__":

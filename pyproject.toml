@@ -12,7 +12,8 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "httpx>=0.27",
-    "psycopg2-binary==2.9.13",
+    "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
     "bcrypt>=4.1",
     "PyJWT>=2.8",
     "phonenumbers==9.0.40",
@@ -26,6 +27,11 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "ruff",
+]
+# Détecteur NER local (facultatif, activé par NER_ENABLED=true). Le modèle de langue français
+# n'est pas un paquet pip ordinaire : python -m spacy download fr_core_news_lg
+ner = [
+    "spacy>=3.8",
 ]
 
 [tool.setuptools.packages.find]

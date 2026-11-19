@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from anonymia.service.business_objects.audit_entry import AuditEntry
 from anonymia.service.business_objects.user import User
 from anonymia.service.interfaces.archive_repository import ArchiveRepository
@@ -49,3 +51,54 @@ class FakeUserRepository(UserRepository):
     async def delete(self, user_id: int) -> None:
         user = await self.find_by_id(user_id)
         del self.users[user.login]
+
+
+class FakeCurseur:
+    """Curseur asynchrone : renvoie les lignes préparées par le test."""
+
+    def __init__(self, connexion: "FakeConnexion") -> None:
+        self.c = connexion
+
+    async def fetchone(self):
+        return self.c.ligne
+
+    async def fetchall(self):
+        return self.c.lignes
+
+
+class FakeConnexion:
+    """Connexion PostgreSQL asynchrone factice : enregistre les requêtes reçues."""
+
+    def __init__(self) -> None:
+        self.requetes: list[tuple[str, tuple | None]] = []
+        self.commits = self.rollbacks = 0
+        self.ligne = None
+        self.lignes: list = []
+        self.echec = False
+
+    async def execute(self, query, params=None):
+        if self.echec:
+            raise RuntimeError("erreur SQL")
+        self.requetes.append((" ".join(query.split()), params))
+        return FakeCurseur(self)
+
+
+class FakePool:
+    """
+    Pool de connexions factice, qui reprend la règle de psycopg_pool : la transaction est
+    validée à la sortie de `async with pool.connection()`, ou annulée si une erreur l'a
+    interrompue. Les dépôts n'ont donc aucun commit à écrire eux-mêmes.
+    """
+
+    def __init__(self) -> None:
+        self.connexion = FakeConnexion()
+
+    @asynccontextmanager
+    async def connection(self):
+        try:
+            yield self.connexion
+        except BaseException:
+            self.connexion.rollbacks += 1
+            raise
+        else:
+            self.connexion.commits += 1

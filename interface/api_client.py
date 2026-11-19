@@ -147,7 +147,7 @@ class ApiClient:
         return self._objet(reponse)
 
     def supprimer_utilisateur(self, user_id: int) -> None:
-        """DELETE /admin/utilisateurs/{id} : supprime le compte ET ses traitements archivés (ADMIN)."""
+        """DELETE /admin/utilisateurs/{id} : supprime le compte ; ses traitements restent dans l'historique (ADMIN)."""
         self._requete("DELETE", f"/admin/utilisateurs/{user_id}")
 
     # ------------------------------------------------------------------

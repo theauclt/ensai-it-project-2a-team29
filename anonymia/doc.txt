@@ -39,8 +39,21 @@ Depuis la racine du depot (le dossier qui contient pyproject.toml) :
 
     pip install -e ".[dev]"
 
-A refaire seulement si pyproject.toml change. Pensez a reactiver
-l'environnement (source .venv/bin/activate) a chaque nouveau terminal.
+A refaire seulement si pyproject.toml change (c'est le cas apres le passage a
+psycopg 3 : sans cela, l'API s'arrete avec "No module named 'psycopg'").
+Pensez a reactiver l'environnement (source .venv/bin/activate) a chaque
+nouveau terminal.
+
+Detecteur NER spaCy (facultatif). L'application marche tres bien sans lui : il
+n'est utilise que si NER_ENABLED=true dans .env (partie 3). Pour l'installer :
+
+    pip install -e ".[ner]"
+    python -m spacy download fr_core_news_lg
+
+La premiere commande installe la bibliotheque spaCy (declaree dans pyproject.toml,
+groupe "ner"). La seconde telecharge le modele de langue francais, qui ne passe
+pas par pip install ordinaire. Sans le modele, l'API refuse de demarrer quand
+NER_ENABLED=true.
 
 
 --------------------------------------------------------------------------------
@@ -120,6 +133,24 @@ Verifier que la base et l'authentification fonctionnent :
 Quatre lignes doivent s'afficher, les deux premieres a "True", la troisieme
 aussi. Ce script ajoute un traitement fictif dans l'historique a chaque appel.
 
+Comment l'application parle a PostgreSQL (psycopg 3) :
+  - L'API utilise la bibliotheque psycopg 3 en mode asynchrone, avec un "pool"
+    de connexions (1 a 5, fichier persistence/dao/db_connexion.py). Une requete
+    SQL n'arrete donc plus les autres traitements (par exemple un appel au LLM).
+  - Le pool est ouvert au demarrage de l'API et ferme a son arret (main.py).
+    S'il ne peut pas joindre la base, l'API refuse de demarrer.
+  - Chaque connexion est verifiee avant d'etre utilisee : si la base a redemarre
+    ou coupe la connexion, le pool en ouvre une nouvelle tout seul. Plus besoin
+    de relancer l'API.
+  - Les deux depots (utilisateurs, historique) recoivent le pool a leur creation
+    (dependencies.py). Une ecriture est validee a la fin du bloc, ou annulee si
+    une erreur survient : il n'y a plus de commit a ecrire a la main.
+  - Les scripts (init_db, create_user, check_db) n'ont pas besoin de
+    l'asynchrone : init_db et create_user utilisent une connexion ordinaire,
+    check_db ouvre un pool comme l'API.
+  - La session PostgreSQL est reglee sur UTC. Les dates de l'historique sont
+    stockees sans fuseau, et l'API les relit comme de l'UTC.
+
 
 --------------------------------------------------------------------------------
 5. LANCER L'API
@@ -180,8 +211,10 @@ Aucun outil a installer : tout se fait dans la page.
                                               "mot_de_passe": "...", "role": "USER"}
    PATCH  /admin/utilisateurs/{id}/role       corps : {"role": "SUPERVISOR"}
    PATCH  /admin/utilisateurs/{id}/activation corps : {"est_active": false}
-   DELETE /admin/utilisateurs/{id}            supprime le compte ET ses traitements
-                                              archives (preferer la desactivation)
+   DELETE /admin/utilisateurs/{id}            supprime le compte (ses traitements
+                                              restent dans l'historique, sans nom
+                                              d'utilisateur ; preferer la desactivation
+                                              pour seulement bloquer l'acces)
    L'id se lit dans la reponse de GET /admin/utilisateurs.
 
 4) Se connecter avec un autre compte (par exemple un simple utilisateur)
@@ -575,13 +608,23 @@ L'API ne demarre pas au premier lancement, erreur sur la table "users"
     -> Les tables n'existent pas : lancer init_db avant (partie 4).
 
 Caviardage ou historique : erreur 500, et dans le terminal d'uvicorn
-"psycopg2.errors.UndefinedColumn: column ... does not exist"
+"psycopg.errors.UndefinedColumn: column ... does not exist"
     -> Votre base n'a pas une colonne ajoutee par l'equipe. Arreter l'API,
        lancer "python -m anonymia.data.init_db" (sans danger, rien n'est
        supprime), puis relancer l'API. A faire apres chaque "git pull".
 
 KeyError: 'POSTGRES_HOST' (ou autre variable POSTGRES_*)
     -> .env absent ou incomplet, ou commande lancee hors de la racine du depot.
+
+ModuleNotFoundError: No module named 'psycopg' (ou 'psycopg_pool')
+    -> Le projet utilise maintenant psycopg 3 : activer l'environnement virtuel
+       puis relancer pip install -e ".[dev]" (partie 2).
+
+L'API ne demarre pas, apres 30 secondes : "PoolTimeout: pool initialization
+incomplete after 30 sec" (precede de lignes "error connecting in 'pool-1'")
+    -> La base est injoignable : lire la ligne "connection failed" juste avant,
+       verifier POSTGRES_HOST, POSTGRES_PORT, le mot de passe, et que la base
+       est bien demarree.
 
 Connexion : erreur 500
     -> Lire le message dans le terminal d'uvicorn. Le plus souvent : identifiants

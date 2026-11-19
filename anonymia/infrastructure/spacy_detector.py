@@ -1,6 +1,7 @@
-#pip install spacy
-#python -m spacy download fr_core_news_lg
-# à ajouter dans dependencies
+# Installation (dépendance facultative, déclarée dans pyproject.toml, groupe "ner") :
+#   pip install -e ".[ner]"
+#   python -m spacy download fr_core_news_lg
+# Sans cela, l'application fonctionne normalement : le détecteur n'est utilisé que si NER_ENABLED=true.
 
 import asyncio
 import threading

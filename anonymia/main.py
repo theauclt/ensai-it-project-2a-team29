@@ -17,6 +17,7 @@ from .dependencies import (
     build_auth_service,
     build_detection_service,
     build_history_service,
+    build_pool,
     build_user_repository,
 )
 from .presentation.routes import routers
@@ -28,8 +29,12 @@ async def lifespan(app: FastAPI):
     # Échec immédiat au démarrage plutôt qu'à la première connexion
     verifier_secret()
 
-    archive_repo = build_archive_repository()
-    user_repo = build_user_repository()
+    # Pool PostgreSQL : on attend une première connexion pour échouer tout de suite si la base est injoignable
+    pool = build_pool()
+    await pool.open(wait=True)
+
+    archive_repo = build_archive_repository(pool)
+    user_repo = build_user_repository(pool)
     # LLM_ENABLED=false : démarrage avec les expressions régulières seules
     with_llm = os.environ.get("LLM_ENABLED", "true").lower() != "false"
     with_ner = os.environ.get("NER_ENABLED", "false").lower() == "true"
@@ -48,6 +53,7 @@ async def lifespan(app: FastAPI):
     yield
 
     await app.state.detection_service.aclose()  # ferme le client HTTP du LLM
+    await pool.close()
 
 
 app = FastAPI(

@@ -113,7 +113,7 @@ async def supprimer_utilisateur(
     user: User = Depends(get_current_user),
     service: AdminService = Depends(get_admin_service),
 ) -> None:
-    """Supprime un compte et, avec lui, ses traitements archivés."""
+    """Supprime un compte. Ses traitements restent dans l'historique, sans lien avec un utilisateur."""
     try:
         await service.supprimer(user, user_id)
     except _ERREURS as exc:

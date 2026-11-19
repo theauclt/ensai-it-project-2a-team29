@@ -1,15 +1,16 @@
+from psycopg_pool import AsyncConnectionPool
+
 from ..service.business_objects.audit_entry import AuditEntry
 from ..service.interfaces.archive_repository import ArchiveRepository
-from .dao.db_connexion import DBConnection
 
 
 class PostgresArchiveRepository(ArchiveRepository):
     """
-    Implémentation concrète de ArchiveRepository pour PostgreSQL.
+    Implémentation concrète de ArchiveRepository pour PostgreSQL (psycopg 3, asynchrone).
     """
 
-    def __init__(self) -> None:
-        self.__connection = DBConnection().connection
+    def __init__(self, pool: AsyncConnectionPool) -> None:
+        self.__pool = pool
 
     async def save(self, entry: AuditEntry) -> None:
         # pour enregistrer un traitemen† dans la bdd
@@ -22,8 +23,9 @@ class PostgresArchiveRepository(ArchiveRepository):
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        with self.__connection.cursor() as cur:
-            cur.execute(
+        # le pool valide la transaction à la sortie du bloc (ou l'annule si une erreur survient)
+        async with self.__pool.connection() as conn:
+            await conn.execute(
                 query,
                 (
                     entry.user_id,
@@ -38,22 +40,21 @@ class PostgresArchiveRepository(ArchiveRepository):
                     entry.juge_type,
                 ),
             )
-        self.__connection.commit()
 
-    async def find_by_user(self, user_id: str) -> list[AuditEntry]:
-        # pour quand un superviseur veut filtrer par user 
+    async def find_by_user(self, user_id: int) -> list[AuditEntry]:
+        # pour quand un superviseur veut filtrer par user
         query = "SELECT * FROM traitements WHERE user_id = %s"
-        with self.__connection.cursor() as cur:
-            cur.execute(query, (user_id,))
-            rows = cur.fetchall()
+        async with self.__pool.connection() as conn:
+            cur = await conn.execute(query, (user_id,))
+            rows = await cur.fetchall()
         return [self._to_entry(row) for row in rows]
 
     async def find_all(self) -> list[AuditEntry]:
-        # pour voir toute l'historoque complet 
+        # pour voir toute l'historoque complet
         query = "SELECT * FROM traitements"
-        with self.__connection.cursor() as cur:
-            cur.execute(query)
-            rows = cur.fetchall()
+        async with self.__pool.connection() as conn:
+            cur = await conn.execute(query)
+            rows = await cur.fetchall()
         return [self._to_entry(row) for row in rows]
 
     def _to_entry(self, row: dict) -> AuditEntry:

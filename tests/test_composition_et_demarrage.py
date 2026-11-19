@@ -14,9 +14,22 @@ from tests.fakes import FakeArchiveRepository, FakeUserRepository
 
 @pytest.fixture
 def faux_postgres(monkeypatch):
-    """Les dépôts PostgreSQL sont remplacés par des dépôts en mémoire."""
-    monkeypatch.setattr(dependencies, "PostgresArchiveRepository", FakeArchiveRepository)
-    monkeypatch.setattr(dependencies, "PostgresUserRepository", FakeUserRepository)
+    """Les dépôts PostgreSQL sont remplacés par des dépôts en mémoire (qui ignorent le pool)."""
+    monkeypatch.setattr(dependencies, "PostgresArchiveRepository", lambda pool: FakeArchiveRepository())
+    monkeypatch.setattr(dependencies, "PostgresUserRepository", lambda pool: FakeUserRepository())
+
+
+class FauxPool:
+    """Pool de connexions factice : note s'il est ouvert (avec attente) puis fermé."""
+
+    def __init__(self):
+        self.evenements = []
+
+    async def open(self, wait=False):
+        self.evenements.append(("ouvert", wait))
+
+    async def close(self):
+        self.evenements.append(("ferme", None))
 
 
 def test_le_detecteur_llm_se_configure_par_variables_d_environnement(monkeypatch):
@@ -40,7 +53,7 @@ def test_le_detecteur_llm_sans_cle_n_envoie_pas_d_en_tete_d_autorisation(monkeyp
 
 
 def test_mode_degrade_retire_le_detecteur_llm(faux_postgres):
-    depot = dependencies.build_archive_repository()
+    depot = dependencies.build_archive_repository(FauxPool())
 
     complet = dependencies.build_detection_service(depot, with_llm=True)
     degrade = dependencies.build_detection_service(depot, with_llm=False)
@@ -51,8 +64,9 @@ def test_mode_degrade_retire_le_detecteur_llm(faux_postgres):
 
 
 def test_les_services_sont_assembles(faux_postgres):
-    archive = dependencies.build_archive_repository()
-    users = dependencies.build_user_repository()
+    pool = FauxPool()
+    archive = dependencies.build_archive_repository(pool)
+    users = dependencies.build_user_repository(pool)
 
     assert dependencies.build_history_service(archive, users) is not None
     assert isinstance(dependencies.build_auth_service(users), AuthentificationService)
@@ -69,13 +83,15 @@ def demarrage(monkeypatch):
     """Remplace la construction des services par des versions en mémoire."""
     users = FakeUserRepository()
     fermetures = []
+    pool = FauxPool()
 
     class FauxDetection:
         async def aclose(self):
             fermetures.append("fermé")
 
-    monkeypatch.setattr(main, "build_archive_repository", FakeArchiveRepository)
-    monkeypatch.setattr(main, "build_user_repository", lambda: users)
+    monkeypatch.setattr(main, "build_pool", lambda: pool)
+    monkeypatch.setattr(main, "build_archive_repository", lambda p: FakeArchiveRepository())
+    monkeypatch.setattr(main, "build_user_repository", lambda p: users)
     monkeypatch.setattr(
         main,
         "build_detection_service",
@@ -86,7 +102,7 @@ def demarrage(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "secret-de-test-assez-long-pour-hs256-0123456789")
     for cle in ("ADMIN_LOGIN", "ADMIN_PASSWORD"):
         monkeypatch.delenv(cle, raising=False)
-    return SimpleNamespace(users=users, fermetures=fermetures)
+    return SimpleNamespace(users=users, fermetures=fermetures, pool=pool)
 
 
 def test_demarrage_sans_jwt_secret_echoue(demarrage, monkeypatch):
@@ -109,6 +125,14 @@ def test_demarrage_range_les_services_et_ferme_le_llm_a_l_arret(demarrage):
         assert client.get("/", follow_redirects=False).status_code in (302, 307)
 
     assert demarrage.fermetures == ["fermé"]
+
+
+def test_demarrage_ouvre_le_pool_en_attendant_la_base_puis_le_ferme(demarrage):
+    with TestClient(main.app):
+        # ouvert avant que l'API réponde, avec attente d'une première connexion
+        assert demarrage.pool.evenements == [("ouvert", True)]
+
+    assert demarrage.pool.evenements == [("ouvert", True), ("ferme", None)]
 
 
 def test_demarrage_cree_le_compte_administrateur_initial(demarrage, monkeypatch):

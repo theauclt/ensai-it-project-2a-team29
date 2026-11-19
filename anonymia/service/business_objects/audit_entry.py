@@ -12,7 +12,7 @@ class AuditEntry:
 
     def __init__(
         self,
-        user_id: str,
+        user_id: int | None,
         date_traitement: datetime,
         hash_document: str,
         strategie_anonymisation: str,
