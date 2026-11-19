@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from anonymia.service.business_objects.audit_entry import AuditEntry
 from anonymia.service.business_objects.user import User
 from anonymia.service.interfaces.archive_repository import ArchiveRepository
+from anonymia.service.interfaces.tentative_injection_repository import TentativeInjectionRepository
 from anonymia.service.interfaces.user_repository import UserRepository
 
 
@@ -51,6 +53,27 @@ class FakeUserRepository(UserRepository):
     async def delete(self, user_id: int) -> None:
         user = await self.find_by_id(user_id)
         del self.users[user.login]
+
+
+class FakeTentativeInjectionRepository(TentativeInjectionRepository):
+    """Tentatives d'injection gardées en mémoire, un document compté une fois par compte."""
+
+    def __init__(self) -> None:
+        self.tentatives: dict[tuple[int, str], tuple[list[str], datetime]] = {}
+
+    async def enregistrer(
+        self, user_id: int, hash_document: str, types_injection: list[str], date_tentative: datetime
+    ) -> None:
+        self.tentatives.setdefault((user_id, hash_document), (list(types_injection), date_tentative))
+
+    async def compter(self, user_id: int) -> int:
+        return sum(1 for uid, _ in self.tentatives if uid == user_id)
+
+    async def compter_par_utilisateur(self) -> dict[int, int]:
+        compteurs: dict[int, int] = {}
+        for uid, _ in self.tentatives:
+            compteurs[uid] = compteurs.get(uid, 0) + 1
+        return compteurs
 
 
 class FakeCurseur:

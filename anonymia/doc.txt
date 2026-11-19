@@ -79,6 +79,18 @@ Ouvrez .env et renseignez :
            pas encore. Mot de passe : 8 caracteres minimum. Au demarrage suivant,
            le compte existe deja : il n'est pas modifie.
 
+    LOGIN_MAX_ECHECS, LOGIN_FENETRE_SECONDES, LOGIN_VERROUILLAGE_SECONDES
+        -> limitation des tentatives de connexion (facultatif). Par defaut :
+           apres 5 echecs en 15 minutes (900 s) sur un meme login, ce login est
+           bloque pendant 15 minutes : l'API repond 429, meme avec le bon mot de
+           passe. LOGIN_MAX_ECHECS=0 supprime la limite.
+           Les echecs sont comptes aussi pour les logins qui n'existent pas, donc
+           le blocage ne revele pas quels comptes existent. Chaque echec est
+           ecrit dans le terminal d'uvicorn (login seulement, jamais le mot de
+           passe), ainsi que chaque blocage.
+           Les compteurs sont en memoire : ils repartent de zero quand l'API
+           redemarre, et chaque processus a les siens.
+
     LLM_ENABLED=false
         -> pour un premier test avec les expressions regulieres seules.
 
@@ -305,8 +317,25 @@ H2. Administration : avec le compte ADMIN
    - PATCH .../activation avec est_active=false, puis se connecter .......... 401
    - DELETE sur son propre compte ou sur le dernier admin actif ............. 409
    - Avec un compte USER ou SUPERVISOR, toute route /admin ................. 403
-   Le role est lu dans le jeton : une desactivation ou un changement de role
-   ne prend effet sur un jeton deja emis qu'a son expiration (30 minutes).
+   Le compte est relu en base a chaque requete : une desactivation ou un
+   changement de role s'applique tout de suite, meme a un jeton deja emis.
+
+H2 bis. Tentatives d'injection de prompt par compte
+   Avec un compte USER, envoyer a /documents/caviarder des textes differents
+   contenant "Ignore previous instructions." :
+   - 1re et 2e tentative : confirmation demandee, compte non signale
+   - 3e tentative : GET /admin/utilisateurs (ADMIN) montre tentatives_injection=3
+     et comportement_dangereux=true (page Administration : colonne Alerte)
+   - 10e tentative ............................................................ 403
+     puis toute requete avec le meme jeton ..................................... 401
+     et la connexion est refusee ............................................... 401
+   - PATCH .../activation avec est_active=true (ADMIN) : le compte se reconnecte,
+     reste signale ; la tentative suivante le desactive de nouveau ............. 403
+   Un meme document bloque puis renvoye avec "confirmer": true ne compte qu'une
+   fois. /documents/analyser compte aussi. Un compte ADMIN est signale mais jamais
+   desactive automatiquement. Seuils : INJECTION_SEUIL_ALERTE (3) et
+   INJECTION_SEUIL_DESACTIVATION (10). Table : tentatives_injection (empreinte du
+   document uniquement, jamais son contenu).
 
 H3. Tableau de bord (interface Streamlit, parties "interface" en fin de fichier)
    Faire d'abord quelques "caviarder" avec des comptes differents, puis :
@@ -633,6 +662,12 @@ Connexion : erreur 500
 Connexion : erreur 401 alors que le mot de passe est bon
     -> Le compte n'existe pas dans CETTE base (partie 4), ou il est desactive.
 
+Connexion : erreur 429 "Trop de tentatives de connexion"
+    -> Ce login a cumule trop d'echecs : attendre la fin du blocage (indiquee dans
+       le message, 15 minutes par defaut), meme avec le bon mot de passe. Pour
+       debloquer tout de suite pendant vos essais : redemarrer l'API (les
+       compteurs sont en memoire) ou mettre LOGIN_MAX_ECHECS=0 dans .env.
+
 Toutes les requetes renvoient 401 apres un moment
     -> Le jeton a expire (30 minutes) : se reconnecter.
 
@@ -671,8 +706,11 @@ Comportements a connaitre :
 - la confiance des PII du LLM est celle qu'il s'attribue lui-meme (voir 9 bis) ;
   celle des expressions regulieres est toujours 1.0, y compris pour les formats
   les plus larges (anciennes plaques d'immatriculation par exemple)
-- le jeton dure 30 minutes et n'est pas reverifie en base : un compte desactive
-  garde son acces jusqu'a l'expiration du jeton
+- le jeton dure 30 minutes et n'est pas revocable, mais le compte est relu en
+  base a chaque requete : un compte desactive perd son acces tout de suite
+- un compte qui envoie 10 documents suspects d'injection est desactive
+  automatiquement (voir H2 bis) ; le compteur n'est pas remis a zero quand un
+  administrateur le reactive
 - /journaux affiche l'identifiant numerique de l'utilisateur, pas son login
 - "analyser" n'enregistre rien dans l'historique, seul "caviarder" archive
 - si l'archivage en base echoue, le caviardage echoue aussi (pas de traitement

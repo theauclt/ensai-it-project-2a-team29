@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ..service.business_objects.injection_verdict import metadonnees_juge
 from ..service.business_objects.user import User
 from ..service.detection_service import DetectionService
+from ..service.surveillance_injections import CompteDesactiveError
 from .providers import get_detection_service
 from .schemas import (
     AnalyseResponse,
@@ -27,12 +28,30 @@ MESSAGE_CONFIRMATION = (
 )
 
 
+def _compte_desactive(exc: CompteDesactiveError) -> HTTPException:
+    """Le compte vient d'atteindre le seuil de tentatives d'injection : il est désactivé."""
+    return HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
+
+
 @router.post("/analyser", response_model=AnalyseResponse)
 async def analyser(
+    body: DocumentRequest,
+    user: User = Depends(get_current_user),
     body: AnalyserRequest,
     user: User = Depends(get_current_user),
     service: DetectionService = Depends(get_detection_service),
 ) -> AnalyseResponse:
+    """
+    Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle).
+
+    Un document suspect d'injection compte comme une tentative pour le compte, comme sur
+    /caviarder : 403 si le compte atteint le seuil de désactivation.
+    """
+    try:
+        types_injection = await service.verifier_injection(body.contenu, user.id)
+    except CompteDesactiveError as exc:
+        raise _compte_desactive(exc) from exc
+    spans, detecteurs = await service.analyze_with_status(body.contenu)
     """
     Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle).
 
@@ -56,6 +75,9 @@ async def analyser(
             "Le juge LLM a repéré une tentative de manipulation du système : relisez attentivement le résultat."
         )
     return AnalyseResponse(
+        detecteurs=detecteurs,
+        mode_degrade=DETECTEUR_LLM not in detecteurs,
+        types_injection=types_injection,
         detecteurs=resultat.detecteurs,
         mode_degrade=DETECTEUR_LLM not in resultat.detecteurs,
         types_injection=resultat.types_injection,
@@ -87,7 +109,10 @@ async def caviarder(
             status.HTTP_400_BAD_REQUEST,
             f"Stratégie inconnue. Disponibles : {', '.join(service.available_strategies())}",
         )
-    resultat = await service.detect(body.contenu, body.strategie, user.id, body.confirmer)
+    try:
+        resultat = await service.detect(body.contenu, body.strategie, user.id, body.confirmer)
+    except CompteDesactiveError as exc:
+        raise _compte_desactive(exc) from exc
     if resultat.confirmation_requise:
         return CaviardageResponse(
             confirmation_requise=True,

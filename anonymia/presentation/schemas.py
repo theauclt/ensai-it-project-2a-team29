@@ -153,3 +153,9 @@ class UtilisateurResponse(BaseModel):
     role: str
     est_active: bool
     date_creation: datetime | None = None
+    tentatives_injection: int = Field(
+        default=0, description="Documents suspects d'injection de prompt envoyés par ce compte"
+    )
+    comportement_dangereux: bool = Field(
+        default=False, description="Vrai à partir de 3 tentatives d'injection : compte à surveiller"
+    )

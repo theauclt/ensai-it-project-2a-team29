@@ -1,8 +1,14 @@
+import logging
+
 import bcrypt
 
 from .business_objects.user import User
 from .interfaces.user_repository import UserRepository
+from .limiteur_connexions import LimiteurConnexions
 from .mots_de_passe import MOT_DE_PASSE_MIN, hasher_mot_de_passe
+
+# Les échecs de connexion sont des événements de sécurité (même journal que les alertes d'injection)
+logger = logging.getLogger("security")
 
 # bcrypt ne lit que les 72 premiers octets d'un mot de passe et (version 5) refuse les plus longs
 MOT_DE_PASSE_MAX_OCTETS = 72
@@ -21,8 +27,17 @@ class AuthentificationService:
     et vérifie ensuite son mot de passe.
     """
 
-    def __init__(self, user_repository: UserRepository) -> None:
+    def __init__(
+        self,
+        user_repository: UserRepository,
+        limiteur: LimiteurConnexions | None = None,
+    ) -> None:
+        """
+        limiteur : bloque temporairement un login après trop d'échecs (audit ER3-02).
+                   Sans limiteur, le nombre d'essais n'est pas borné.
+        """
         self.__user_repository = user_repository
+        self.__limiteur = limiteur
 
     async def authentifier(
         self,
@@ -36,10 +51,18 @@ class AuthentificationService:
         Le calcul bcrypt est fait dans tous les cas (login inconnu, compte désactivé, mot de
         passe trop long) et la réponse est la même : rien ne distingue ces échecs.
 
+        Chaque échec est journalisé et compté ; un login qui en cumule trop est bloqué un
+        moment, même avec le bon mot de passe.
+
         Returns:
             User | None: l'utilisateur si l'authentification réussit,
             sinon None.
+
+        Raises:
+            TropDeTentativesError: le login est temporairement bloqué.
         """
+        if self.__limiteur is not None:
+            self.__limiteur.verifier(login)
 
         user = await self.__user_repository.find_by_login(login)
 
@@ -47,8 +70,27 @@ class AuthentificationService:
         mot_de_passe_valide = self.__verifier_mot_de_passe(mot_de_passe, empreinte)
 
         if user is None or not user.est_active or not mot_de_passe_valide:
+            # Jamais le mot de passe, ni la raison de l'échec : rien ne doit distinguer les cas
+            logger.warning("Échec de connexion pour le login %r", login[:100])
+            if self.__limiteur is not None:
+                self.__limiteur.enregistrer_echec(login)
             return None
 
+        if self.__limiteur is not None:
+            self.__limiteur.enregistrer_succes(login)
+        return user
+
+    async def utilisateur_actif(self, user_id: int) -> User | None:
+        """
+        Relit un compte en base, pour vérifier un jeton à chaque requête.
+
+        Returns:
+            User | None: le compte s'il existe et est actif, sinon None (compte supprimé, ou
+            désactivé par un administrateur ou après trop de tentatives d'injection).
+        """
+        user = await self.__user_repository.find_by_id(user_id)
+        if user is None or not user.est_active:
+            return None
         return user
 
     async def creer_admin_initial(self, login: str, mot_de_passe: str) -> bool:

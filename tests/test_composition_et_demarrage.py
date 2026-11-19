@@ -9,7 +9,11 @@ from anonymia import dependencies, main
 from anonymia.infrastructure.llm_detector import LLMDetector
 from anonymia.infrastructure.regex_detector import RegexDetector
 from anonymia.service.authentification_service import AuthentificationService
-from tests.fakes import FakeArchiveRepository, FakeUserRepository
+from tests.fakes import (
+    FakeArchiveRepository,
+    FakeTentativeInjectionRepository,
+    FakeUserRepository,
+)
 
 
 @pytest.fixture
@@ -63,6 +67,75 @@ def test_mode_degrade_retire_le_detecteur_llm(faux_postgres):
     assert degrade._injection_detector is not None
 
 
+def test_la_limitation_des_connexions_a_des_valeurs_par_defaut(monkeypatch):
+    for nom in ("LOGIN_MAX_ECHECS", "LOGIN_FENETRE_SECONDES", "LOGIN_VERROUILLAGE_SECONDES"):
+        monkeypatch.delenv(nom, raising=False)
+
+    limiteur = dependencies.build_limiteur_connexions()
+
+    assert (limiteur._max_echecs, limiteur._fenetre, limiteur._verrouillage) == (5, 900.0, 900.0)
+
+
+def test_la_limitation_des_connexions_se_configure_par_variables_d_environnement(monkeypatch):
+    monkeypatch.setenv("LOGIN_MAX_ECHECS", "3")
+    monkeypatch.setenv("LOGIN_FENETRE_SECONDES", "60")
+    monkeypatch.setenv("LOGIN_VERROUILLAGE_SECONDES", "120")
+
+    limiteur = dependencies.build_limiteur_connexions()
+
+    assert (limiteur._max_echecs, limiteur._fenetre, limiteur._verrouillage) == (3, 60.0, 120.0)
+
+
+def test_la_limitation_des_connexions_peut_etre_desactivee(monkeypatch):
+    monkeypatch.setenv("LOGIN_MAX_ECHECS", "0")
+
+    assert dependencies.build_limiteur_connexions() is None
+
+
+def test_le_service_d_authentification_est_construit_avec_la_limitation(faux_postgres, monkeypatch):
+    monkeypatch.delenv("LOGIN_MAX_ECHECS", raising=False)
+
+    service = dependencies.build_auth_service(dependencies.build_user_repository(FauxPool()))
+
+    assert service._AuthentificationService__limiteur is not None
+
+
+def test_la_surveillance_des_injections_a_des_seuils_par_defaut(monkeypatch):
+    for nom in ("INJECTION_SEUIL_ALERTE", "INJECTION_SEUIL_DESACTIVATION"):
+        monkeypatch.delenv(nom, raising=False)
+
+    surveillance = dependencies.build_surveillance_injections(
+        FakeTentativeInjectionRepository(), FakeUserRepository()
+    )
+
+    assert (surveillance._seuil_alerte, surveillance._seuil_desactivation) == (3, 10)
+
+
+def test_la_surveillance_des_injections_se_configure_par_variables_d_environnement(monkeypatch):
+    monkeypatch.setenv("INJECTION_SEUIL_ALERTE", "2")
+    monkeypatch.setenv("INJECTION_SEUIL_DESACTIVATION", "5")
+
+    surveillance = dependencies.build_surveillance_injections(
+        FakeTentativeInjectionRepository(), FakeUserRepository()
+    )
+
+    assert (surveillance._seuil_alerte, surveillance._seuil_desactivation) == (2, 5)
+
+
+def test_des_seuils_d_injection_incoherents_empechent_le_demarrage(monkeypatch):
+    monkeypatch.setenv("INJECTION_SEUIL_ALERTE", "10")
+    monkeypatch.setenv("INJECTION_SEUIL_DESACTIVATION", "3")
+
+    with pytest.raises(ValueError, match="Seuils"):
+        dependencies.build_surveillance_injections(FakeTentativeInjectionRepository(), FakeUserRepository())
+
+
+def test_le_depot_des_tentatives_est_construit_sur_le_pool():
+    depot = dependencies.build_tentative_injection_repository(FauxPool())
+
+    assert type(depot).__name__ == "PostgresTentativeInjectionRepository"
+
+
 def test_les_services_sont_assembles(faux_postgres):
     pool = FauxPool()
     archive = dependencies.build_archive_repository(pool)
@@ -92,13 +165,14 @@ def demarrage(monkeypatch):
     monkeypatch.setattr(main, "build_pool", lambda: pool)
     monkeypatch.setattr(main, "build_archive_repository", lambda p: FakeArchiveRepository())
     monkeypatch.setattr(main, "build_user_repository", lambda p: users)
+    monkeypatch.setattr(main, "build_tentative_injection_repository", lambda p: FakeTentativeInjectionRepository())
     monkeypatch.setattr(
         main,
         "build_detection_service",
         lambda archive, **_options: FauxDetection(),
     )
     monkeypatch.setattr(main, "build_history_service", lambda a, u: SimpleNamespace())
-    monkeypatch.setattr(main, "build_admin_service", lambda u: SimpleNamespace())
+    monkeypatch.setattr(main, "build_admin_service", lambda u, **_options: SimpleNamespace())
     monkeypatch.setenv("JWT_SECRET", "secret-de-test-assez-long-pour-hs256-0123456789")
     for cle in ("ADMIN_LOGIN", "ADMIN_PASSWORD"):
         monkeypatch.delenv(cle, raising=False)

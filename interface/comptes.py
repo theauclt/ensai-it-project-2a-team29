@@ -16,7 +16,10 @@ MOT_DE_PASSE_MIN = 8
 MOT_DE_PASSE_MAX = 128
 LOGIN_MAX = 255
 
-COLONNES = ["Identifiant", "Rôle", "Statut", "Créé le", "N°"]
+COLONNES = ["Identifiant", "Rôle", "Statut", "Alerte", "Tentatives d'injection", "Créé le", "N°"]
+
+# Texte de la colonne Alerte pour un compte signalé par l'API (3 tentatives d'injection ou plus)
+ALERTE_DANGER = "⚠️ Comportement dangereux"
 
 
 def libelle_role(role: str) -> str:
@@ -27,7 +30,36 @@ def libelle_role(role: str) -> str:
 def libelle_compte(compte: dict) -> str:
     """Texte affiché dans la liste de choix, par exemple 'alice : Utilisateur, actif'."""
     statut = "actif" if compte["est_active"] else "désactivé"
-    return f"{compte['login']} : {libelle_role(compte['role'])}, {statut}"
+    alerte = " ⚠️" if est_signale(compte) else ""
+    return f"{compte['login']} : {libelle_role(compte['role'])}, {statut}{alerte}"
+
+
+def est_signale(compte: dict) -> bool:
+    """Vrai si l'API signale ce compte pour comportement dangereux (tentatives d'injection répétées)."""
+    return bool(compte.get("comportement_dangereux", False))
+
+
+def signales(comptes: list[dict]) -> list[dict]:
+    """Comptes signalés, du plus grand nombre de tentatives d'injection au plus petit."""
+    return sorted(
+        (c for c in comptes if est_signale(c)),
+        key=lambda c: (-c.get("tentatives_injection", 0), c["login"].casefold()),
+    )
+
+
+def avertissement_signales(comptes: list[dict]) -> str | None:
+    """Message affiché au-dessus du tableau quand des comptes sont signalés (None sinon)."""
+    liste = signales(comptes)
+    if not liste:
+        return None
+    details = ", ".join(
+        f"{c['login']} ({c.get('tentatives_injection', 0)} tentatives"
+        + ("" if c["est_active"] else ", désactivé")
+        + ")"
+        for c in liste
+    )
+    pluriel = "s" if len(liste) > 1 else ""
+    return f"Comportement dangereux : {len(liste)} compte{pluriel} signalé{pluriel} pour des tentatives d'injection de prompt répétées : {details}."
 
 
 def verifier_creation(login: str, mot_de_passe: str, confirmation: str) -> str | None:
@@ -63,6 +95,8 @@ def lignes_tableau(comptes: list[dict], tz: tzinfo, mon_login: str) -> list[dict
             "Identifiant": c["login"] + (" (vous)" if c["login"] == mon_login else ""),
             "Rôle": libelle_role(c["role"]),
             "Statut": "Actif" if c["est_active"] else "Désactivé",
+            "Alerte": ALERTE_DANGER if est_signale(c) else "",
+            "Tentatives d'injection": c.get("tentatives_injection", 0),
             "Créé le": journal.formater_date(c.get("date_creation"), tz),
             "N°": c["id"],
         }
