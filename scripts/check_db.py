@@ -1,9 +1,3 @@
-from anonymia.persistence.dao.db_connexion import construire_pool
-from anonymia.persistence.postgres_archive_repository import PostgresArchiveRepository
-from anonymia.persistence.postgres_user_repository import PostgresUserRepository
-from anonymia.service.authentification_service import AuthentificationService
-from anonymia.service.business_objects.audit_entry import AuditEntry
-
 """
 Vérifie à la main que les dépôts PostgreSQL et l'authentification fonctionnent.
 
@@ -15,6 +9,12 @@ import sys
 from datetime import UTC, datetime
 
 from dotenv import load_dotenv
+
+from anonymia.persistence.dao.db_connexion import construire_pool
+from anonymia.persistence.postgres_archive_repository import PostgresArchiveRepository
+from anonymia.persistence.postgres_user_repository import PostgresUserRepository
+from anonymia.service.authentification_service import AuthentificationService
+from anonymia.service.business_objects.audit_entry import AuditEntry
 
 load_dotenv()
 
