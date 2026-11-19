@@ -38,6 +38,7 @@ Le fichier `.env` est ignoré par Git : ne jamais le partager ni le commiter.
 | `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_SCHEMA` | Base de données |
 | `JWT_SECRET` | Secret de signature des jetons, **32 caractères minimum** (sans lui, l'API refuse de démarrer) |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | Compte administrateur initial, créé au démarrage s'il n'existe pas (8 caractères et 72 octets maximum) |
+| `LOGIN_MAX_ECHECS`, `LOGIN_FENETRE_SECONDES`, `LOGIN_VERROUILLAGE_SECONDES` | Anti force brute : par défaut, 5 échecs en 15 min bloquent le login 15 min (erreur 429). `LOGIN_MAX_ECHECS=0` désactive la limite |
 | `LLM_ENABLED` | `false` : expressions régulières seules |
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_TIMEOUT` | LLM (Datalab : `https://llm.lab.sspcloud.fr/api`, modèle `qwen3-8-27b`) |
 | `LLM_JUDGE_ENABLED`, `LLM_JUDGE_MODEL` | Juge d'injection LLM (actif avec le LLM, il double les appels) |
@@ -149,6 +150,7 @@ Les tableaux (`metriques.md`, `metriques_juge.md`) sont écrits dans le dossier 
 | 500 avec `UndefinedColumn` | Relancer `python -m anonymia.data.init_db`, puis l'API |
 | `KeyError: 'POSTGRES_HOST'` | `.env` absent ou incomplet, ou commande lancée hors de la racine |
 | 401 alors que le mot de passe est bon | Le compte n'existe pas dans cette base, ou il est désactivé |
+| 429 « Trop de tentatives de connexion » | Le login a cumulé trop d'échecs : attendre la fin du blocage (15 min par défaut) |
 | Tous les verdicts du juge « unavailable » | `LLM_JUDGE_MODEL` faux (404/400), clé refusée (401/403) ou trop d'appels (429) |
 | `pip install` refusé (« installé par le système ») | Activer l'environnement virtuel |
 

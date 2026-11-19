@@ -63,6 +63,39 @@ def test_mode_degrade_retire_le_detecteur_llm(faux_postgres):
     assert degrade._injection_detector is not None
 
 
+def test_la_limitation_des_connexions_a_des_valeurs_par_defaut(monkeypatch):
+    for nom in ("LOGIN_MAX_ECHECS", "LOGIN_FENETRE_SECONDES", "LOGIN_VERROUILLAGE_SECONDES"):
+        monkeypatch.delenv(nom, raising=False)
+
+    limiteur = dependencies.build_limiteur_connexions()
+
+    assert (limiteur._max_echecs, limiteur._fenetre, limiteur._verrouillage) == (5, 900.0, 900.0)
+
+
+def test_la_limitation_des_connexions_se_configure_par_variables_d_environnement(monkeypatch):
+    monkeypatch.setenv("LOGIN_MAX_ECHECS", "3")
+    monkeypatch.setenv("LOGIN_FENETRE_SECONDES", "60")
+    monkeypatch.setenv("LOGIN_VERROUILLAGE_SECONDES", "120")
+
+    limiteur = dependencies.build_limiteur_connexions()
+
+    assert (limiteur._max_echecs, limiteur._fenetre, limiteur._verrouillage) == (3, 60.0, 120.0)
+
+
+def test_la_limitation_des_connexions_peut_etre_desactivee(monkeypatch):
+    monkeypatch.setenv("LOGIN_MAX_ECHECS", "0")
+
+    assert dependencies.build_limiteur_connexions() is None
+
+
+def test_le_service_d_authentification_est_construit_avec_la_limitation(faux_postgres, monkeypatch):
+    monkeypatch.delenv("LOGIN_MAX_ECHECS", raising=False)
+
+    service = dependencies.build_auth_service(dependencies.build_user_repository(FauxPool()))
+
+    assert service._AuthentificationService__limiteur is not None
+
+
 def test_les_services_sont_assembles(faux_postgres):
     pool = FauxPool()
     archive = dependencies.build_archive_repository(pool)

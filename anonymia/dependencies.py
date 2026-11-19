@@ -22,6 +22,7 @@ from .service.detection_service import DetectionService
 from .service.history_service import HistoryService
 from .service.interfaces.archive_repository import ArchiveRepository
 from .service.interfaces.user_repository import UserRepository
+from .service.limiteur_connexions import LimiteurConnexions
 from .service.prompt_injector_detector import PromptInjectionDetector
 
 # Charge automatiquement les variables du fichier .env dans os.environ
@@ -124,9 +125,26 @@ def build_history_service(
     return HistoryService(archive_repo, user_repo)
 
 
+def build_limiteur_connexions() -> LimiteurConnexions | None:
+    """
+    Limite les tentatives de connexion (audit ER3-02). Variables d'environnement :
+      LOGIN_MAX_ECHECS          : échecs qui déclenchent le blocage (5 par défaut ; 0 = pas de limite)
+      LOGIN_FENETRE_SECONDES    : durée pendant laquelle les échecs comptent ensemble (900 par défaut)
+      LOGIN_VERROUILLAGE_SECONDES : durée du blocage (900 par défaut)
+    """
+    max_echecs = int(os.environ.get("LOGIN_MAX_ECHECS", "5"))
+    if max_echecs <= 0:
+        return None
+    return LimiteurConnexions(
+        max_echecs=max_echecs,
+        fenetre=float(os.environ.get("LOGIN_FENETRE_SECONDES", "900")),
+        verrouillage=float(os.environ.get("LOGIN_VERROUILLAGE_SECONDES", "900")),
+    )
+
+
 def build_auth_service(user_repo: UserRepository) -> AuthentificationService:
     """Assemble le service d'authentification (utilisé via Depends dans les routes)."""
-    return AuthentificationService(user_repo)
+    return AuthentificationService(user_repo, build_limiteur_connexions())
 
 
 def build_admin_service(user_repo: UserRepository) -> AdminService:

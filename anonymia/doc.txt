@@ -79,6 +79,18 @@ Ouvrez .env et renseignez :
            pas encore. Mot de passe : 8 caracteres minimum. Au demarrage suivant,
            le compte existe deja : il n'est pas modifie.
 
+    LOGIN_MAX_ECHECS, LOGIN_FENETRE_SECONDES, LOGIN_VERROUILLAGE_SECONDES
+        -> limitation des tentatives de connexion (facultatif). Par defaut :
+           apres 5 echecs en 15 minutes (900 s) sur un meme login, ce login est
+           bloque pendant 15 minutes : l'API repond 429, meme avec le bon mot de
+           passe. LOGIN_MAX_ECHECS=0 supprime la limite.
+           Les echecs sont comptes aussi pour les logins qui n'existent pas, donc
+           le blocage ne revele pas quels comptes existent. Chaque echec est
+           ecrit dans le terminal d'uvicorn (login seulement, jamais le mot de
+           passe), ainsi que chaque blocage.
+           Les compteurs sont en memoire : ils repartent de zero quand l'API
+           redemarre, et chaque processus a les siens.
+
     LLM_ENABLED=false
         -> pour un premier test avec les expressions regulieres seules.
 
@@ -632,6 +644,12 @@ Connexion : erreur 500
 
 Connexion : erreur 401 alors que le mot de passe est bon
     -> Le compte n'existe pas dans CETTE base (partie 4), ou il est desactive.
+
+Connexion : erreur 429 "Trop de tentatives de connexion"
+    -> Ce login a cumule trop d'echecs : attendre la fin du blocage (indiquee dans
+       le message, 15 minutes par defaut), meme avec le bon mot de passe. Pour
+       debloquer tout de suite pendant vos essais : redemarrer l'API (les
+       compteurs sont en memoire) ou mettre LOGIN_MAX_ECHECS=0 dans .env.
 
 Toutes les requetes renvoient 401 apres un moment
     -> Le jeton a expire (30 minutes) : se reconnecter.
