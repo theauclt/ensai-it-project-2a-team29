@@ -1,65 +1,24 @@
 """
-Tests des dépôts PostgreSQL avec une fausse connexion : on vérifie les requêtes
-envoyées et les commit/rollback, sans base de données réelle.
+Tests des dépôts PostgreSQL avec un faux pool de connexions : on vérifie les requêtes
+envoyées et la validation ou l'annulation de la transaction, sans base de données réelle.
 """
 import re
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
+from psycopg.rows import dict_row
 
-from anonymia.persistence import postgres_archive_repository as archive_module
-from anonymia.persistence import postgres_user_repository as user_module
 from anonymia.persistence.dao import db_connexion
 from anonymia.persistence.postgres_archive_repository import PostgresArchiveRepository
 from anonymia.persistence.postgres_user_repository import PostgresUserRepository
 from anonymia.service.business_objects.audit_entry import AuditEntry
-from anonymia.utils.singleton import Singleton
-
-
-class FakeCursor:
-    def __init__(self, connexion):
-        self.c = connexion
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        return False
-
-    def execute(self, query, params=None):
-        if self.c.echec:
-            raise RuntimeError("erreur SQL")
-        self.c.requetes.append((" ".join(query.split()), params))
-
-    def fetchone(self):
-        return self.c.ligne
-
-    def fetchall(self):
-        return self.c.lignes
-
-
-class FakeConnexion:
-    def __init__(self):
-        self.requetes, self.commits, self.rollbacks = [], 0, 0
-        self.ligne, self.lignes, self.echec = None, [], False
-
-    def cursor(self):
-        return FakeCursor(self)
-
-    def commit(self):
-        self.commits += 1
-
-    def rollback(self):
-        self.rollbacks += 1
+from tests.fakes import FakePool
 
 
 @pytest.fixture
-def connexion(monkeypatch):
-    fausse = FakeConnexion()
-    for module in (archive_module, user_module):
-        monkeypatch.setattr(module, "DBConnection", lambda: SimpleNamespace(connection=fausse))
-    return fausse
+def pool():
+    """Le pool factice et sa connexion, que les dépôts reçoivent à la construction."""
+    return FakePool()
 
 
 LIGNE_USER = {
@@ -79,30 +38,30 @@ LIGNE_TRAITEMENT = {
 # ---------------------------------------------------------------------------
 
 
-async def test_archive_enregistre_toutes_les_colonnes_dont_injection(connexion):
+async def test_archive_enregistre_toutes_les_colonnes_dont_injection(pool):
     entree = AuditEntry(
         1, datetime(2026, 1, 1, tzinfo=UTC), "h" * 64, "masking", "RegexDetector", 2,
         injection_suspectee=True,
     )
 
-    await PostgresArchiveRepository().save(entree)
+    await PostgresArchiveRepository(pool).save(entree)
 
-    requete, params = connexion.requetes[0]
+    requete, params = pool.connexion.requetes[0]
     # la colonne injection_suspectee reçoit True, quelle que soit sa position dans l'INSERT
     colonnes = re.search(r"\((.*?)\)\s*VALUES", requete, re.DOTALL).group(1)
     noms = [c.strip() for c in colonnes.split(",")]
     assert params[noms.index("injection_suspectee")] is True
-    assert connexion.commits == 1
+    assert pool.connexion.commits == 1
 
 
-async def test_archive_lit_par_utilisateur_et_en_entier(connexion):
-    connexion.lignes = [LIGNE_TRAITEMENT]
-    depot = PostgresArchiveRepository()
+async def test_archive_lit_par_utilisateur_et_en_entier(pool):
+    pool.connexion.lignes = [LIGNE_TRAITEMENT]
+    depot = PostgresArchiveRepository(pool)
 
     par_user = await depot.find_by_user(1)
     tout = await depot.find_all()
 
-    assert connexion.requetes[0][1] == (1,)
+    assert pool.connexion.requetes[0][1] == (1,)
     assert par_user[0].id == 5
     assert par_user[0].injection_suspectee is True
     assert [e.nb_pii_detectees for e in tout] == [2]
@@ -113,41 +72,41 @@ async def test_archive_lit_par_utilisateur_et_en_entier(connexion):
 # ---------------------------------------------------------------------------
 
 
-async def test_user_recherches(connexion):
-    depot = PostgresUserRepository()
+async def test_user_recherches(pool):
+    depot = PostgresUserRepository(pool)
 
     assert await depot.find_by_login("inconnu") is None
     assert await depot.find_by_id(9) is None
 
-    connexion.ligne = LIGNE_USER
-    connexion.lignes = [LIGNE_USER]
+    pool.connexion.ligne = LIGNE_USER
+    pool.connexion.lignes = [LIGNE_USER]
     assert (await depot.find_by_login("alice")).login == "alice"
     assert (await depot.find_by_id(1)).role == "USER"
     assert [u.id for u in await depot.find_all()] == [1]
 
 
-async def test_user_ecritures_commit(connexion):
-    depot = PostgresUserRepository()
+async def test_user_ecritures_commit(pool):
+    depot = PostgresUserRepository(pool)
 
     await depot.create("bob", "hash", "USER")
     await depot.update_role(1, "ADMIN")
     await depot.set_active(1, False)
     await depot.delete(1)
 
-    assert connexion.commits == 4
-    assert connexion.rollbacks == 0
-    assert connexion.requetes[0][0].startswith("INSERT INTO users")
-    assert connexion.requetes[3][0].startswith("DELETE FROM users")
+    assert pool.connexion.commits == 4
+    assert pool.connexion.rollbacks == 0
+    assert pool.connexion.requetes[0][0].startswith("INSERT INTO users")
+    assert pool.connexion.requetes[3][0].startswith("DELETE FROM users")
 
 
-async def test_user_ecriture_en_echec_fait_un_rollback_et_remonte(connexion):
-    connexion.echec = True
+async def test_user_ecriture_en_echec_fait_un_rollback_et_remonte(pool):
+    pool.connexion.echec = True
 
     with pytest.raises(RuntimeError):
-        await PostgresUserRepository().create("bob", "hash", "USER")
+        await PostgresUserRepository(pool).create("bob", "hash", "USER")
 
-    assert connexion.rollbacks == 1
-    assert connexion.commits == 0
+    assert pool.connexion.rollbacks == 1
+    assert pool.connexion.commits == 0
 
 
 # ---------------------------------------------------------------------------
@@ -155,24 +114,36 @@ async def test_user_ecriture_en_echec_fait_un_rollback_et_remonte(connexion):
 # ---------------------------------------------------------------------------
 
 
-def test_connexion_unique_autocommit(monkeypatch):
-    monkeypatch.setitem(db_connexion.os.environ, "POSTGRES_HOST", "h")
-    for cle, valeur in {"PORT": "5432", "DATABASE": "d", "USER": "u", "PASSWORD": "p", "SCHEMA": "s"}.items():
+@pytest.fixture
+def env_postgres(monkeypatch):
+    for cle, valeur in {
+        "HOST": "h", "PORT": "5432", "DATABASE": "d", "USER": "u", "PASSWORD": "p", "SCHEMA": "s",
+    }.items():
         monkeypatch.setenv(f"POSTGRES_{cle}", valeur)
-    appels = []
 
-    class Conn:
-        autocommit = False
 
-    def faux_connect(**kwargs):
-        appels.append(kwargs)
-        return Conn()
+def test_parametres_de_connexion_lus_dans_l_environnement(env_postgres):
+    parametres = db_connexion.parametres_connexion()
 
-    monkeypatch.setattr(db_connexion.psycopg2, "connect", faux_connect)
-    monkeypatch.setattr(Singleton, "_instances", {})
+    assert (parametres["host"], parametres["port"], parametres["dbname"]) == ("h", "5432", "d")
+    assert (parametres["user"], parametres["password"]) == ("u", "p")
+    assert "-c search_path=s" in parametres["options"]
+    # les dates sont stockées sans fuseau et relues comme de l'UTC : la session doit être en UTC
+    assert "-c timezone=UTC" in parametres["options"]
 
-    a, b = db_connexion.DBConnection(), db_connexion.DBConnection()
 
-    assert a is b and len(appels) == 1
-    assert a.connection.autocommit is True
-    assert appels[0]["options"] == "-c search_path=s"
+def test_parametre_manquant_est_signale(env_postgres, monkeypatch):
+    monkeypatch.delenv("POSTGRES_HOST")
+
+    with pytest.raises(KeyError):
+        db_connexion.parametres_connexion()
+
+
+def test_le_pool_est_cree_ferme_et_renvoie_des_dictionnaires(env_postgres):
+    pool = db_connexion.construire_pool()
+
+    # ouvert plus tard, par le démarrage de l'API (await pool.open())
+    assert pool.closed
+    assert pool.kwargs["row_factory"] is dict_row
+    assert pool.kwargs["options"] == db_connexion.parametres_connexion()["options"]
+    assert (pool.min_size, pool.max_size) == (db_connexion.POOL_MIN, db_connexion.POOL_MAX)

@@ -12,12 +12,12 @@ import getpass
 import sys
 
 import bcrypt
-import psycopg2
+import psycopg
 from dotenv import load_dotenv
 
-from anonymia.persistence.dao.db_connexion import DBConnection
+from anonymia.persistence.dao.db_connexion import connexion_synchrone
 
-load_dotenv()  # doit précéder l'import de DBConnection (lit POSTGRES_* à la création)
+load_dotenv()  # charge POSTGRES_* avant la connexion
 
 ROLES = ("USER", "SUPERVISOR", "ADMIN")
 
@@ -39,15 +39,13 @@ def main() -> int:
     # bcrypt génère lui-même un sel aléatoire, intégré dans le hash stocké
     mdp_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    connection = DBConnection().connection
     try:
-        with connection.cursor() as cur:
-            cur.execute(
+        with connexion_synchrone() as connection:
+            connection.execute(
                 "INSERT INTO users (username, mdp_hash, role) VALUES (%s, %s, %s)",
                 (login, mdp_hash, role),
             )
-        connection.commit()
-    except psycopg2.Error as exc:
+    except psycopg.Error as exc:
         print(f"Création impossible : {type(exc).__name__} (login déjà pris ?)")
         return 1
 

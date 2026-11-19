@@ -6,12 +6,14 @@ import os
 
 import httpx
 from dotenv import load_dotenv
+from psycopg_pool import AsyncConnectionPool
 
 from .infrastructure.anonymization_strategy_factory import AnonymizationStrategyFactory
 from .infrastructure.llm_detector import LLMDetector
 from .infrastructure.llm_injection_judge import LLMInjectionJudge
 from .infrastructure.regex_detector import RegexDetector
 from .infrastructure.spacy_detector import MODELE_PAR_DEFAUT, SpacyDetector
+from .persistence.dao.db_connexion import construire_pool
 from .persistence.postgres_archive_repository import PostgresArchiveRepository
 from .persistence.postgres_user_repository import PostgresUserRepository
 from .service.admin_service import AdminService
@@ -70,14 +72,22 @@ def build_spacy_detector() -> SpacyDetector:
     return SpacyDetector.charger(os.environ.get("SPACY_MODEL", MODELE_PAR_DEFAUT))
 
 
-def build_archive_repository() -> ArchiveRepository:
+def build_pool() -> AsyncConnectionPool:
+    """
+    Pool de connexions à PostgreSQL (variables POSTGRES_*), partagé par les deux dépôts.
+    Il est créé fermé : main.py l'ouvre au démarrage (`await pool.open()`) et le ferme à l'arrêt.
+    """
+    return construire_pool()
+
+
+def build_archive_repository(pool: AsyncConnectionPool) -> ArchiveRepository:
     """Dépôt de l'historique des traitements (PostgreSQL)."""
-    return PostgresArchiveRepository()
+    return PostgresArchiveRepository(pool)
 
 
-def build_user_repository() -> UserRepository:
+def build_user_repository(pool: AsyncConnectionPool) -> UserRepository:
     """Dépôt des comptes utilisateurs (PostgreSQL)."""
-    return PostgresUserRepository()
+    return PostgresUserRepository(pool)
 
 
 def build_detection_service(

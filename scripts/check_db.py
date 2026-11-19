@@ -1,3 +1,4 @@
+from anonymia.persistence.dao.db_connexion import construire_pool
 from anonymia.persistence.postgres_archive_repository import PostgresArchiveRepository
 from anonymia.persistence.postgres_user_repository import PostgresUserRepository
 from anonymia.service.authentification_service import AuthentificationService
@@ -19,7 +20,16 @@ load_dotenv()
 
 
 async def main(login: str, password: str) -> int:
-    auth = AuthentificationService(PostgresUserRepository())
+    pool = construire_pool()
+    await pool.open(wait=True)
+    try:
+        return await verifier(pool, login, password)
+    finally:
+        await pool.close()
+
+
+async def verifier(pool, login: str, password: str) -> int:
+    auth = AuthentificationService(PostgresUserRepository(pool))
 
     print("1. Mauvais mot de passe refusé :", await auth.authentifier(login, "mauvais") is None)
     user = await auth.authentifier(login, password)
@@ -27,7 +37,7 @@ async def main(login: str, password: str) -> int:
     if user is None:
         return 1
 
-    archive = PostgresArchiveRepository()
+    archive = PostgresArchiveRepository(pool)
     await archive.save(AuditEntry(
         user_id=user.id,
         date_traitement=datetime.now(UTC),
