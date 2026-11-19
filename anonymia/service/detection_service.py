@@ -14,7 +14,6 @@ from .interfaces.archive_repository import ArchiveRepository
 from .interfaces.injection_judge import InjectionJudge
 from .interfaces.pii_detector import PIIDetector
 from .prompt_injector_detector import PromptInjectionDetector
-from .surveillance_injections import SurveillanceInjections
 from .types_pii import compter, vers_texte
 
 # Import utilisé uniquement pour le typage : pas de dépendance à l'exécution
@@ -43,7 +42,6 @@ class DetectionService:
         archive_repo: ArchiveRepository,
         injection_detector: PromptInjectionDetector,
         injection_judge: InjectionJudge | None = None,
-        surveillance: SurveillanceInjections | None = None,
     ):
         self._detectors = detectors
         self._strategy_factory = strategy_factory
@@ -51,9 +49,7 @@ class DetectionService:
         self._injection_detector = injection_detector
         # Juge LLM facultatif (FO3) : sans juge, le service fonctionne comme avant
         self._injection_judge = injection_judge
-        # Comptage des tentatives d'injection par compte (sans surveillance : rien n'est compté)
-        self._surveillance = surveillance
-
+    
     def available_strategies(self) -> list[str]:
         """Noms des stratégies d'anonymisation disponibles (endpoint /documents/strategies)."""
         return self._strategy_factory.available_strategies()
