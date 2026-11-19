@@ -56,23 +56,38 @@ class FakeUserRepository(UserRepository):
 
 
 class FakeTentativeInjectionRepository(TentativeInjectionRepository):
-    """Tentatives d'injection gardées en mémoire, un document compté une fois par compte."""
+    """Tentatives d'injection gardées en mémoire : une entrée par envoi suspect."""
 
     def __init__(self) -> None:
-        self.tentatives: dict[tuple[int, str], tuple[list[str], datetime]] = {}
+        # chaque entrée : [user_id, hash_document, types, date, en_attente_confirmation]
+        self.tentatives: list[list] = []
 
     async def enregistrer(
-        self, user_id: int, hash_document: str, types_injection: list[str], date_tentative: datetime
+        self,
+        user_id: int,
+        hash_document: str,
+        types_injection: list[str],
+        date_tentative: datetime,
+        en_attente_confirmation: bool = False,
     ) -> None:
-        self.tentatives.setdefault((user_id, hash_document), (list(types_injection), date_tentative))
+        self.tentatives.append(
+            [user_id, hash_document, list(types_injection), date_tentative, en_attente_confirmation]
+        )
+
+    async def confirmer(self, user_id: int, hash_document: str) -> bool:
+        for tentative in reversed(self.tentatives):
+            if tentative[0] == user_id and tentative[1] == hash_document and tentative[4]:
+                tentative[4] = False
+                return True
+        return False
 
     async def compter(self, user_id: int) -> int:
-        return sum(1 for uid, _ in self.tentatives if uid == user_id)
+        return sum(1 for t in self.tentatives if t[0] == user_id)
 
     async def compter_par_utilisateur(self) -> dict[int, int]:
         compteurs: dict[int, int] = {}
-        for uid, _ in self.tentatives:
-            compteurs[uid] = compteurs.get(uid, 0) + 1
+        for t in self.tentatives:
+            compteurs[t[0]] = compteurs.get(t[0], 0) + 1
         return compteurs
 
 

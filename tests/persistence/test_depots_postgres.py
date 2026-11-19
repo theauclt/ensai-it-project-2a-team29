@@ -157,18 +157,35 @@ def test_le_pool_est_cree_ferme_et_renvoie_des_dictionnaires(env_postgres):
 # ---------------------------------------------------------------------------
 
 
-async def test_tentative_enregistree_une_fois_par_compte_et_par_document(pool):
+async def test_tentative_enregistree_avec_son_etat_d_attente(pool):
     date = datetime(2026, 1, 1, tzinfo=UTC)
 
     await PostgresTentativeInjectionRepository(pool).enregistrer(
-        1, "h" * 64, ["ignore_instructions", "role_change"], date
+        1, "h" * 64, ["ignore_instructions", "role_change"], date, en_attente_confirmation=True
     )
 
     requete, params = pool.connexion.requetes[0]
     assert requete.startswith("INSERT INTO tentatives_injection")
-    assert "ON CONFLICT (user_id, hash_document) DO NOTHING" in requete
-    assert params == (1, date, "h" * 64, "ignore_instructions,role_change")
+    assert "ON CONFLICT" not in requete  # chaque envoi est une ligne
+    assert params == (1, date, "h" * 64, "ignore_instructions,role_change", True)
     assert pool.connexion.commits == 1
+
+
+async def test_confirmation_d_une_tentative_en_attente(pool):
+    pool.connexion.ligne = {"id": 12}
+
+    assert await PostgresTentativeInjectionRepository(pool).confirmer(1, "h" * 64) is True
+    requete, params = pool.connexion.requetes[0]
+    assert requete.startswith("UPDATE tentatives_injection SET en_attente_confirmation = FALSE")
+    assert "RETURNING id" in requete
+    assert params == (1, "h" * 64)
+    assert pool.connexion.commits == 1
+
+
+async def test_confirmation_sans_tentative_en_attente(pool):
+    pool.connexion.ligne = None
+
+    assert await PostgresTentativeInjectionRepository(pool).confirmer(1, "h" * 64) is False
 
 
 async def test_tentatives_comptees_pour_un_compte(pool):

@@ -331,11 +331,14 @@ H2 bis. Tentatives d'injection de prompt par compte
      et la connexion est refusee ............................................... 401
    - PATCH .../activation avec est_active=true (ADMIN) : le compte se reconnecte,
      reste signale ; la tentative suivante le desactive de nouveau ............. 403
-   Un meme document bloque puis renvoye avec "confirmer": true ne compte qu'une
-   fois. /documents/analyser compte aussi. Un compte ADMIN est signale mais jamais
+   Chaque envoi compte, meme si c'est le meme document. Seule exception : un
+   document bloque puis renvoye avec "confirmer": true ne compte qu'une fois
+   (c'est un seul envoi). /documents/analyser compte aussi. Un compte ADMIN est signale mais jamais
    desactive automatiquement. Seuils : INJECTION_SEUIL_ALERTE (3) et
-   INJECTION_SEUIL_DESACTIVATION (10). Table : tentatives_injection (empreinte du
-   document uniquement, jamais son contenu).
+   INJECTION_SEUIL_DESACTIVATION (10). Table : tentatives_injection, une ligne par
+   envoi (empreinte du document uniquement, jamais son contenu). Apres un git pull,
+   relancer python -m anonymia.data.init_db (ajoute la colonne
+   en_attente_confirmation et retire l'ancienne contrainte UNIQUE).
 
 H3. Tableau de bord (interface Streamlit, parties "interface" en fin de fichier)
    Faire d'abord quelques "caviarder" avec des comptes differents, puis :

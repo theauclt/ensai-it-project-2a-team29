@@ -52,16 +52,43 @@ def test_seuils_incoherents_refuses(tentatives, users, alerte, desactivation):
         SurveillanceInjections(tentatives, users, alerte, desactivation)
 
 
-async def test_chaque_document_suspect_compte_une_fois(surveillance):
+async def test_chaque_envoi_compte_meme_pour_le_meme_document(surveillance):
     assert await surveillance.signaler(1, "a" * 64, TYPES) == 1
-    # le même document (bloqué, puis renvoyé avec confirmation) ne compte pas double
-    assert await surveillance.signaler(1, "a" * 64, TYPES) == 1
-    assert await surveillance.signaler(1, "b" * 64, TYPES) == 2
+    assert await surveillance.signaler(1, "a" * 64, TYPES) == 2
+    assert await surveillance.signaler(1, "b" * 64, TYPES) == 3
+
+
+async def test_un_document_bloque_puis_confirme_compte_une_fois(surveillance):
+    assert await surveillance.signaler(1, "a" * 64, TYPES, en_attente_confirmation=True) == 1
+    assert await surveillance.signaler(1, "a" * 64, TYPES, confirmation=True) == 1
+
+
+async def test_le_meme_document_bloque_et_confirme_plusieurs_fois_compte_a_chaque_fois(surveillance):
+    # scénario de l'interface : « Caviarder », puis « Caviarder quand même », sept fois de suite
+    for _ in range(7):
+        await surveillance.signaler(1, "a" * 64, TYPES, en_attente_confirmation=True)
+        nb = await surveillance.signaler(1, "a" * 64, TYPES, confirmation=True)
+
+    assert nb == 7
+
+
+async def test_une_confirmation_sans_blocage_prealable_compte(surveillance):
+    # appel direct de l'API avec confirmer=true : pas de blocage, c'est une tentative
+    assert await surveillance.signaler(1, "a" * 64, TYPES, confirmation=True) == 1
+    assert await surveillance.signaler(1, "a" * 64, TYPES, confirmation=True) == 2
+
+
+async def test_une_confirmation_ne_consomme_que_le_blocage_du_meme_document(surveillance):
+    await surveillance.signaler(1, "a" * 64, TYPES, en_attente_confirmation=True)
+
+    assert await surveillance.signaler(1, "b" * 64, TYPES, confirmation=True) == 2
+    assert await surveillance.signaler(2, "a" * 64, TYPES, confirmation=True) == 1  # autre compte
+    assert await surveillance.signaler(1, "a" * 64, TYPES, confirmation=True) == 2
 
 
 async def test_les_compteurs_sont_propres_a_chaque_compte(surveillance):
     await envoyer(surveillance, 1, 2)
-    # même document envoyé par un autre compte : c'est une tentative de cet autre compte
+
     assert await surveillance.signaler(2, f"{0:064x}", TYPES) == 1
 
 

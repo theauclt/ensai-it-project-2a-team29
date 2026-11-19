@@ -136,9 +136,9 @@ Les tableaux (`metriques.md`, `metriques_juge.md`) sont écrits dans le dossier 
   être caviardés.
 - Historique : si l'archivage échoue, le caviardage échoue (pas de traitement sans trace).
   Supprimer un compte conserve ses traitements (`user_id` devient vide).
-- Tentatives d'injection : chaque document suspect pour le filtre (sur `/caviarder` comme sur
-  `/analyser`) compte comme une tentative pour le compte qui l'envoie, une seule fois par document
-  (bloqué puis confirmé = 1). À 3 tentatives, le compte est signalé « comportement dangereux » dans
+- Tentatives d'injection : chaque envoi d'un document suspect pour le filtre (sur `/caviarder`
+  comme sur `/analyser`) compte comme une tentative pour le compte qui l'envoie, même si c'est le
+  même document. Un document bloqué puis renvoyé avec `"confirmer": true` compte une seule fois. À 3 tentatives, le compte est signalé « comportement dangereux » dans
   la liste des comptes de l'administrateur. À 10, il est désactivé automatiquement (403 sur la
   requête en cours) jusqu'à ce qu'un administrateur le réactive ; le compteur n'est pas remis à
   zéro, donc la tentative suivante le désactive de nouveau. Les comptes ADMIN sont signalés mais

@@ -59,6 +59,16 @@ async def test_document_bloque_puis_confirme_compte_une_seule_fois(contexte):
     assert await tentatives.compter(1) == 1
 
 
+async def test_le_meme_document_traite_sept_fois_compte_sept_tentatives(contexte):
+    service, tentatives, *_ = contexte
+
+    for _ in range(7):
+        await service.detect(SUSPECT, "masking", user_id=1)
+        await service.detect(SUSPECT, "masking", user_id=1, confirmed=True)
+
+    assert await tentatives.compter(1) == 7
+
+
 async def test_verifier_injection_compte_et_renvoie_les_categories(contexte):
     service, tentatives, *_ = contexte
 

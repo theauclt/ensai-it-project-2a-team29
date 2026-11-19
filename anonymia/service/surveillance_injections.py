@@ -1,9 +1,10 @@
 """
 Surveillance des tentatives d'injection de prompt, compte par compte.
 
-Chaque document dans lequel le filtre d'injection repère des motifs suspects compte comme une
-tentative pour le compte qui l'a envoyé (une seule fois par document : un document bloqué puis
-renvoyé avec confirmation ne compte pas double).
+Chaque envoi d'un document dans lequel le filtre d'injection repère des motifs suspects compte
+comme une tentative pour le compte qui l'a envoyé, même si c'est le même document qu'avant.
+Seule exception : un document bloqué puis renvoyé avec confirmation (« Caviarder quand même »)
+est un seul envoi, il ne compte pas double.
 
 - À partir de SEUIL_ALERTE tentatives, le compte est signalé aux administrateurs
   (« comportement dangereux » dans la liste des comptes).
@@ -67,9 +68,21 @@ class SurveillanceInjections:
         self._seuil_alerte = seuil_alerte
         self._seuil_desactivation = seuil_desactivation
 
-    async def signaler(self, user_id: int, hash_document: str, types_injection: list[str]) -> int:
+    async def signaler(
+        self,
+        user_id: int,
+        hash_document: str,
+        types_injection: list[str],
+        en_attente_confirmation: bool = False,
+        confirmation: bool = False,
+    ) -> int:
         """
         Enregistre une tentative d'injection et applique les seuils.
+
+        en_attente_confirmation : le document est bloqué jusqu'à confirmation (/caviarder sans
+                                  confirmer) ; la tentative est comptée dès maintenant.
+        confirmation            : le document est renvoyé avec confirmer=true. S'il suit un
+                                  blocage du même document, il ne compte pas une seconde fois.
 
         On ne journalise que l'identifiant du compte et le nombre de tentatives, jamais le
         document.
@@ -81,9 +94,11 @@ class SurveillanceInjections:
             CompteDesactiveError: le compte (hors ADMIN) a atteint le seuil de désactivation ;
                 il vient d'être désactivé s'il ne l'était pas déjà.
         """
-        await self._tentatives_repo.enregistrer(
-            user_id, hash_document, types_injection, datetime.now(UTC)
-        )
+        deja_comptee = confirmation and await self._tentatives_repo.confirmer(user_id, hash_document)
+        if not deja_comptee:
+            await self._tentatives_repo.enregistrer(
+                user_id, hash_document, types_injection, datetime.now(UTC), en_attente_confirmation
+            )
         nb = await self._tentatives_repo.compter(user_id)
 
         if nb >= self._seuil_alerte:

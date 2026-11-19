@@ -9,8 +9,8 @@ class PostgresTentativeInjectionRepository(TentativeInjectionRepository):
     """
     Implémentation de TentativeInjectionRepository pour PostgreSQL (psycopg 3, asynchrone).
 
-    La contrainte UNIQUE (user_id, hash_document) de la table garantit qu'un même document
-    ne compte qu'une fois par compte, même si deux requêtes arrivent en même temps.
+    Une ligne par envoi suspect. La colonne en_attente_confirmation repère un document bloqué :
+    sa confirmation met la colonne à FALSE au lieu d'ajouter une ligne.
     """
 
     def __init__(self, pool: AsyncConnectionPool) -> None:
@@ -23,17 +23,41 @@ class PostgresTentativeInjectionRepository(TentativeInjectionRepository):
         hash_document: str,
         types_injection: list[str],
         date_tentative: datetime,
+        en_attente_confirmation: bool = False,
     ) -> None:
-        """Insère la tentative ; ON CONFLICT ignore un document déjà compté pour ce compte."""
+        """Insère une ligne pour cette tentative."""
         query = """
-            INSERT INTO tentatives_injection (user_id, date_tentative, hash_document, types_injection)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id, hash_document) DO NOTHING
+            INSERT INTO tentatives_injection
+                (user_id, date_tentative, hash_document, types_injection, en_attente_confirmation)
+            VALUES (%s, %s, %s, %s, %s)
         """
         async with self.__pool.connection() as conn:
             await conn.execute(
-                query, (user_id, date_tentative, hash_document, ",".join(types_injection))
+                query,
+                (user_id, date_tentative, hash_document, ",".join(types_injection), en_attente_confirmation),
             )
+
+    async def confirmer(self, user_id: int, hash_document: str) -> bool:
+        """
+        Passe à FALSE la dernière tentative en attente pour ce compte et ce document.
+
+        La condition est répétée dans le UPDATE : si deux confirmations arrivent en même temps,
+        une seule trouve la ligne encore en attente, l'autre compte comme une nouvelle tentative.
+        """
+        query = """
+            UPDATE tentatives_injection SET en_attente_confirmation = FALSE
+            WHERE en_attente_confirmation AND id = (
+                SELECT id FROM tentatives_injection
+                WHERE user_id = %s AND hash_document = %s AND en_attente_confirmation
+                ORDER BY id DESC
+                LIMIT 1
+            )
+            RETURNING id
+        """
+        async with self.__pool.connection() as conn:
+            cur = await conn.execute(query, (user_id, hash_document))
+            row = await cur.fetchone()
+        return row is not None
 
     async def compter(self, user_id: int) -> int:
         """Nombre de tentatives enregistrées pour ce compte."""
