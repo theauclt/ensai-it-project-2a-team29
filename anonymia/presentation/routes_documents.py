@@ -35,8 +35,6 @@ def _compte_desactive(exc: CompteDesactiveError) -> HTTPException:
 
 @router.post("/analyser", response_model=AnalyseResponse)
 async def analyser(
-    body: DocumentRequest,
-    user: User = Depends(get_current_user),
     body: AnalyserRequest,
     user: User = Depends(get_current_user),
     service: DetectionService = Depends(get_detection_service),
@@ -44,21 +42,15 @@ async def analyser(
     """
     Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle).
 
-    Un document suspect d'injection compte comme une tentative pour le compte, comme sur
-    /caviarder : 403 si le compte atteint le seuil de désactivation.
+    Comme /caviarder : filtre d'injection avant le LLM (confirmation si suspect), juge
+    d'injection, et entrée dans l'historique (stratégie « analyse »). Un document suspect
+    d'injection compte comme une tentative pour le compte : 403 si le compte atteint le
+    seuil de désactivation.
     """
     try:
-        types_injection = await service.verifier_injection(body.contenu, user.id)
+        resultat = await service.analyse(body.contenu, user.id, body.confirmer)
     except CompteDesactiveError as exc:
         raise _compte_desactive(exc) from exc
-    spans, detecteurs = await service.analyze_with_status(body.contenu)
-    """
-    Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle).
-
-    Comme /caviarder : filtre d'injection avant le LLM (confirmation si suspect), juge
-    d'injection, et entrée dans l'historique (stratégie « analyse »).
-    """
-    resultat = await service.analyse(body.contenu, user.id, body.confirmer)
     if resultat.confirmation_requise:
         return AnalyseResponse(
             pii=[],
@@ -75,9 +67,6 @@ async def analyser(
             "Le juge LLM a repéré une tentative de manipulation du système : relisez attentivement le résultat."
         )
     return AnalyseResponse(
-        detecteurs=detecteurs,
-        mode_degrade=DETECTEUR_LLM not in detecteurs,
-        types_injection=types_injection,
         detecteurs=resultat.detecteurs,
         mode_degrade=DETECTEUR_LLM not in resultat.detecteurs,
         types_injection=resultat.types_injection,
