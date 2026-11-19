@@ -15,15 +15,24 @@ from .infrastructure.regex_detector import RegexDetector
 from .infrastructure.spacy_detector import MODELE_PAR_DEFAUT, SpacyDetector
 from .persistence.dao.db_connexion import construire_pool
 from .persistence.postgres_archive_repository import PostgresArchiveRepository
+from .persistence.postgres_tentative_injection_repository import (
+    PostgresTentativeInjectionRepository,
+)
 from .persistence.postgres_user_repository import PostgresUserRepository
 from .service.admin_service import AdminService
 from .service.authentification_service import AuthentificationService
 from .service.detection_service import DetectionService
 from .service.history_service import HistoryService
 from .service.interfaces.archive_repository import ArchiveRepository
+from .service.interfaces.tentative_injection_repository import TentativeInjectionRepository
 from .service.interfaces.user_repository import UserRepository
 from .service.limiteur_connexions import LimiteurConnexions
 from .service.prompt_injector_detector import PromptInjectionDetector
+from .service.surveillance_injections import (
+    SEUIL_ALERTE,
+    SEUIL_DESACTIVATION,
+    SurveillanceInjections,
+)
 
 # Charge automatiquement les variables du fichier .env dans os.environ
 load_dotenv()
@@ -91,14 +100,41 @@ def build_user_repository(pool: AsyncConnectionPool) -> UserRepository:
     return PostgresUserRepository(pool)
 
 
+def build_tentative_injection_repository(pool: AsyncConnectionPool) -> TentativeInjectionRepository:
+    """Dépôt des tentatives d'injection de prompt, par compte (PostgreSQL)."""
+    return PostgresTentativeInjectionRepository(pool)
+
+
+def build_surveillance_injections(
+    tentatives_repo: TentativeInjectionRepository, user_repo: UserRepository
+) -> SurveillanceInjections:
+    """
+    Signalement puis désactivation des comptes qui multiplient les injections. Variables :
+      INJECTION_SEUIL_ALERTE        : tentatives à partir desquelles le compte est signalé (3 par défaut)
+      INJECTION_SEUIL_DESACTIVATION : tentatives à partir desquelles il est désactivé (10 par défaut)
+    """
+    return SurveillanceInjections(
+        tentatives_repo,
+        user_repo,
+        seuil_alerte=int(os.environ.get("INJECTION_SEUIL_ALERTE", str(SEUIL_ALERTE))),
+        seuil_desactivation=int(
+            os.environ.get("INJECTION_SEUIL_DESACTIVATION", str(SEUIL_DESACTIVATION))
+        ),
+    )
+
+
 def build_detection_service(
-    archive_repo: ArchiveRepository, with_llm: bool = True, with_ner: bool = False
+    archive_repo: ArchiveRepository,
+    with_llm: bool = True,
+    with_ner: bool = False,
+    surveillance: SurveillanceInjections | None = None,
 ) -> DetectionService:
     """
     Assemble le service. Mode dégradé = retirer le détecteur LLM de la liste.
 
     Le juge d'injection (FO3) n'existe que si le LLM est activé, et peut être désactivé avec
     LLM_JUDGE_ENABLED=false (il double les appels au LLM). Il partage le client HTTP du détecteur.
+    surveillance : compte les tentatives d'injection de chaque compte (aucun comptage sans elle).
     """
     detectors = [RegexDetector()]
     judge = None
@@ -115,6 +151,7 @@ def build_detection_service(
         archive_repo=archive_repo,
         injection_detector=PromptInjectionDetector(),
         injection_judge=judge,
+        surveillance=surveillance,
     )
 
 
@@ -147,6 +184,8 @@ def build_auth_service(user_repo: UserRepository) -> AuthentificationService:
     return AuthentificationService(user_repo, build_limiteur_connexions())
 
 
-def build_admin_service(user_repo: UserRepository) -> AdminService:
+def build_admin_service(
+    user_repo: UserRepository, surveillance: SurveillanceInjections | None = None
+) -> AdminService:
     """Assemble le service de gestion des comptes (administrateurs)."""
-    return AdminService(user_repo)
+    return AdminService(user_repo, surveillance)

@@ -13,6 +13,7 @@ from .interfaces.archive_repository import ArchiveRepository
 from .interfaces.injection_judge import InjectionJudge
 from .interfaces.pii_detector import PIIDetector
 from .prompt_injector_detector import PromptInjectionDetector
+from .surveillance_injections import SurveillanceInjections
 from .types_pii import compter, vers_texte
 
 # Import utilisé uniquement pour le typage : pas de dépendance à l'exécution
@@ -38,6 +39,7 @@ class DetectionService:
         archive_repo: ArchiveRepository,
         injection_detector: PromptInjectionDetector,
         injection_judge: InjectionJudge | None = None,
+        surveillance: SurveillanceInjections | None = None,
     ):
         self._detectors = detectors
         self._strategy_factory = strategy_factory
@@ -45,7 +47,9 @@ class DetectionService:
         self._injection_detector = injection_detector
         # Juge LLM facultatif (FO3) : sans juge, le service fonctionne comme avant
         self._injection_judge = injection_judge
-    
+        # Comptage des tentatives d'injection par compte (sans surveillance : rien n'est compté)
+        self._surveillance = surveillance
+
     def available_strategies(self) -> list[str]:
         """Noms des stratégies d'anonymisation disponibles (endpoint /documents/strategies)."""
         return self._strategy_factory.available_strategies()
@@ -71,6 +75,22 @@ class DetectionService:
         """Catégories d'injection de prompt repérées dans le texte (vide si rien de suspect)."""
         return self._injection_detector.detect(content)
 
+    async def verifier_injection(self, content: str, user_id: int) -> list[str]:
+        """
+        Passe le document au filtre d'injection, avant tout appel au LLM.
+
+        Si le document est suspect, la tentative est comptée pour ce compte (une seule fois par
+        document). Au seuil de désactivation, le compte est désactivé et CompteDesactiveError
+        est levée : le document n'est pas traité.
+
+        Returns:
+            list[str]: les catégories d'injection repérées (vide si rien de suspect).
+        """
+        injection_types = self._injection_detector.detect(content)
+        if injection_types and self._surveillance is not None:
+            await self._surveillance.signaler(user_id, _empreinte(content), injection_types)
+        return injection_types
+
     async def detect(
         self,
         content: str,
@@ -80,8 +100,9 @@ class DetectionService:
     ) -> AnonymizationResult:
         strategy = self._strategy_factory.get_strategy(strategy_name)
 
-        # Filtre d'injection avant les détecteurs (donc avant le LLM)
-        injection_types = self._injection_detector.detect(content)
+        # Filtre d'injection avant les détecteurs (donc avant le LLM). Un compte qui atteint le
+        # seuil de tentatives est désactivé ici (CompteDesactiveError) : rien n'est traité.
+        injection_types = await self.verifier_injection(content, user_id)
         if injection_types and not confirmed:
             return AnonymizationResult(
                 document=None,
@@ -103,7 +124,7 @@ class DetectionService:
             AuditEntry(
                 user_id=user_id,
                 date_traitement=datetime.now(UTC),
-                hash_document=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                hash_document=_empreinte(content),
                 strategie_anonymisation=strategy_name,
                 detecteurs_contributeurs=",".join(detectors_ok),
                 nb_pii_detectees=len(spans),
@@ -191,3 +212,8 @@ class DetectionService:
             kept.insert(i, span)
             starts.insert(i, span.start)
         return kept
+
+
+def _empreinte(content: str) -> str:
+    """Empreinte SHA-256 du document : l'historique et le compteur de tentatives la partagent."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()

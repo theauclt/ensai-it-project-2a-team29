@@ -39,6 +39,7 @@ Le fichier `.env` est ignoré par Git : ne jamais le partager ni le commiter.
 | `JWT_SECRET` | Secret de signature des jetons, **32 caractères minimum** (sans lui, l'API refuse de démarrer) |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | Compte administrateur initial, créé au démarrage s'il n'existe pas (8 caractères et 72 octets maximum) |
 | `LOGIN_MAX_ECHECS`, `LOGIN_FENETRE_SECONDES`, `LOGIN_VERROUILLAGE_SECONDES` | Anti force brute : par défaut, 5 échecs en 15 min bloquent le login 15 min (erreur 429). `LOGIN_MAX_ECHECS=0` désactive la limite |
+| `INJECTION_SEUIL_ALERTE`, `INJECTION_SEUIL_DESACTIVATION` | Tentatives d'injection de prompt par compte : signalement à 3, désactivation automatique à 10 (par défaut) |
 | `LLM_ENABLED` | `false` : expressions régulières seules |
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_TIMEOUT` | LLM (Datalab : `https://llm.lab.sspcloud.fr/api`, modèle `qwen3-8-27b`) |
 | `LLM_JUDGE_ENABLED`, `LLM_JUDGE_MODEL` | Juge d'injection LLM (actif avec le LLM, il double les appels) |
@@ -95,7 +96,7 @@ Administration (ADMIN). L'interface ne contient aucune logique : tout passe par 
 | `POST /documents/analyser` | tous | `{"contenu": "..."}` : PII avec position et confiance, rien n'est archivé |
 | `GET /documents/strategies` | tous | |
 | `GET /journaux` | SUPERVISOR, ADMIN | filtres : `utilisateur`, `date_debut`, `date_fin` |
-| `/admin/utilisateurs...` | ADMIN | liste, création, rôle, activation, suppression |
+| `/admin/utilisateurs...` | ADMIN | liste (avec `tentatives_injection` et `comportement_dangereux`), création, rôle, activation, suppression |
 
 Il n'y a pas d'inscription libre : l'administrateur crée les comptes. Le rôle est lu dans le
 jeton : 403 pour une route interdite au rôle.
@@ -135,8 +136,15 @@ Les tableaux (`metriques.md`, `metriques_juge.md`) sont écrits dans le dossier 
   être caviardés.
 - Historique : si l'archivage échoue, le caviardage échoue (pas de traitement sans trace).
   Supprimer un compte conserve ses traitements (`user_id` devient vide).
-- Jeton : 30 minutes, relu ni en base ni révocable ; un compte désactivé garde son accès jusqu'à
-  l'expiration.
+- Tentatives d'injection : chaque document suspect pour le filtre (sur `/caviarder` comme sur
+  `/analyser`) compte comme une tentative pour le compte qui l'envoie, une seule fois par document
+  (bloqué puis confirmé = 1). À 3 tentatives, le compte est signalé « comportement dangereux » dans
+  la liste des comptes de l'administrateur. À 10, il est désactivé automatiquement (403 sur la
+  requête en cours) jusqu'à ce qu'un administrateur le réactive ; le compteur n'est pas remis à
+  zéro, donc la tentative suivante le désactive de nouveau. Les comptes ADMIN sont signalés mais
+  jamais désactivés automatiquement. Seule l'empreinte du document est conservée.
+- Jeton : 30 minutes, non révocable, mais le compte est relu en base à chaque requête : une
+  désactivation ou un changement de rôle s'applique tout de suite.
 - Taille maximale d'un document : 100 000 caractères.
 
 ## 11. Problèmes fréquents
@@ -150,6 +158,7 @@ Les tableaux (`metriques.md`, `metriques_juge.md`) sont écrits dans le dossier 
 | 500 avec `UndefinedColumn` | Relancer `python -m anonymia.data.init_db`, puis l'API |
 | `KeyError: 'POSTGRES_HOST'` | `.env` absent ou incomplet, ou commande lancée hors de la racine |
 | 401 alors que le mot de passe est bon | Le compte n'existe pas dans cette base, ou il est désactivé |
+| 403 « Compte désactivé : … documents suspects d'injection » | Le compte a atteint 10 tentatives d'injection : un administrateur doit le réactiver |
 | 429 « Trop de tentatives de connexion » | Le login a cumulé trop d'échecs : attendre la fin du blocage (15 min par défaut) |
 | Tous les verdicts du juge « unavailable » | `LLM_JUDGE_MODEL` faux (404/400), clé refusée (401/403) ou trop d'appels (429) |
 | `pip install` refusé (« installé par le système ») | Activer l'environnement virtuel |

@@ -36,12 +36,15 @@ def _erreur_http(exc: Exception) -> HTTPException:
 
 
 def _reponse(user: User) -> UtilisateurResponse:
+    """Le compte tel que l'API le renvoie : jamais le hash du mot de passe."""
     return UtilisateurResponse(
         id=user.id,
         login=user.login,
         role=user.role,
         est_active=user.est_active,
         date_creation=user.date_creation,
+        tentatives_injection=user.tentatives_injection,
+        comportement_dangereux=user.comportement_dangereux,
     )
 
 

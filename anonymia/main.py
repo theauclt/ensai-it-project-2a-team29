@@ -18,6 +18,8 @@ from .dependencies import (
     build_detection_service,
     build_history_service,
     build_pool,
+    build_surveillance_injections,
+    build_tentative_injection_repository,
     build_user_repository,
 )
 from .presentation.routes import routers
@@ -35,14 +37,18 @@ async def lifespan(app: FastAPI):
 
     archive_repo = build_archive_repository(pool)
     user_repo = build_user_repository(pool)
+    # Tentatives d'injection par compte : signalement à 3, désactivation automatique à 10
+    surveillance = build_surveillance_injections(build_tentative_injection_repository(pool), user_repo)
     # LLM_ENABLED=false : démarrage avec les expressions régulières seules
     with_llm = os.environ.get("LLM_ENABLED", "true").lower() != "false"
     with_ner = os.environ.get("NER_ENABLED", "false").lower() == "true"
 
-    app.state.detection_service = build_detection_service(archive_repo, with_llm=with_llm, with_ner=with_ner)
+    app.state.detection_service = build_detection_service(
+        archive_repo, with_llm=with_llm, with_ner=with_ner, surveillance=surveillance
+    )
     app.state.history_service = build_history_service(archive_repo, user_repo)
     app.state.auth_service = build_auth_service(user_repo)
-    app.state.admin_service = build_admin_service(user_repo)
+    app.state.admin_service = build_admin_service(user_repo, surveillance=surveillance)
 
     # F1 : compte administrateur initial, créé une seule fois (sans effet s'il existe)
     admin_login = os.environ.get("ADMIN_LOGIN")

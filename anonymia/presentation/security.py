@@ -5,7 +5,9 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from ..service.authentification_service import AuthentificationService
 from ..service.business_objects.user import User
+from .providers import get_auth_service
 
 ALGORITHM = "HS256"
 DUREE_JETON = timedelta(minutes=30)
@@ -46,10 +48,17 @@ def create_token(user: User) -> str:
     return jwt.encode(payload, _secret(), algorithm=ALGORITHM)
 
 
-def get_current_user(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    auth: AuthentificationService = Depends(get_auth_service),
 ) -> User:
-    """Dépendance FastAPI : l'utilisateur identifié par le jeton, ou une erreur 401."""
+    """
+    Dépendance FastAPI : l'utilisateur identifié par le jeton, ou une erreur 401.
+
+    Le compte est relu en base à chaque requête : un compte désactivé (par un administrateur
+    ou automatiquement après trop de tentatives d'injection) ou supprimé perd l'accès tout de
+    suite, et le rôle utilisé est celui de la base, pas celui écrit dans le jeton.
+    """
     non_authentifie = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Authentification requise",
@@ -60,12 +69,13 @@ def get_current_user(
 
     try:
         payload = jwt.decode(credentials.credentials, _secret(), algorithms=[ALGORITHM])
-        return User(
-            id=int(payload["sub"]),
-            login=payload["login"],
-            password_hash="",
-            role=payload["role"],
-        )
+        user_id = int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         # jeton expiré, falsifié ou mal formé : même réponse dans tous les cas
         raise non_authentifie from None
+
+    # compte supprimé ou désactivé depuis la création du jeton : même réponse
+    user = await auth.utilisateur_actif(user_id)
+    if user is None:
+        raise non_authentifie
+    return user

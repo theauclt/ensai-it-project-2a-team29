@@ -75,6 +75,9 @@ onglet_comptes, onglet_creation = st.tabs(["Comptes", "Créer un compte"])
 # ----------------------------------------------------------------------
 with onglet_comptes:
     st.caption(comptes.resume(liste))
+    alerte = comptes.avertissement_signales(liste)
+    if alerte:
+        st.warning(alerte, icon="⚠️")
     st.dataframe(comptes.lignes_tableau(liste, tz, utilisateur["login"]), hide_index=True)
     if st.button("🔄 Actualiser la liste"):
         _terminer("info", "Liste actualisée.")
@@ -94,6 +97,14 @@ with onglet_comptes:
     )
     cible = par_id[choix]
     c_est_moi = cible["login"] == utilisateur["login"]
+
+    if comptes.est_signale(cible):
+        st.warning(
+            f"Ce compte a envoyé {cible.get('tentatives_injection', 0)} documents suspects d'injection de prompt. "
+            "À partir de 10, il est désactivé automatiquement (sauf les administrateurs). "
+            "S'il est réactivé, sa prochaine tentative le désactive de nouveau.",
+            icon="⚠️",
+        )
 
     if c_est_moi:
         st.info(
@@ -137,8 +148,8 @@ with onglet_comptes:
             )
 
     st.caption(
-        "Un changement de rôle ou une désactivation s'applique à la prochaine connexion de la personne : "
-        "sa session en cours reste valable jusqu'à 30 minutes."
+        "Un changement de rôle ou une désactivation s'applique immédiatement, "
+        "y compris à la session en cours de la personne."
     )
 
     # --- Suppression (définitive : confirmation en tapant l'identifiant) ---

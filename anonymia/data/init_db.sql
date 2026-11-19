@@ -1,4 +1,5 @@
 -- Suppression des tables si elles existent déjà
+DROP TABLE IF EXISTS tentatives_injection;
 DROP TABLE IF EXISTS traitements;
 DROP TABLE IF EXISTS users;
 
@@ -38,4 +39,25 @@ CREATE TABLE traitements (
         FOREIGN KEY (user_id)
         REFERENCES users(id)
         ON DELETE CASCADE
+);
+
+
+-- =========================
+-- TABLE TENTATIVES_INJECTION
+-- =========================
+-- Un document suspect d'injection de prompt compte une seule fois par compte (UNIQUE).
+-- Seule l'empreinte du document est gardée. 3 tentatives : compte signalé ; 10 : désactivé.
+
+CREATE TABLE tentatives_injection (
+    id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id INTEGER,
+    date_tentative TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    hash_document VARCHAR(64) NOT NULL,
+    types_injection TEXT NOT NULL DEFAULT '',
+
+    CONSTRAINT uq_tentative_user_document UNIQUE (user_id, hash_document),
+    CONSTRAINT fk_tentatives_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
 );
