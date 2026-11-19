@@ -1,6 +1,7 @@
 from .business_objects.user import User
 from .interfaces.user_repository import UserRepository
 from .mots_de_passe import MOT_DE_PASSE_MIN, hasher_mot_de_passe
+from .surveillance_injections import SurveillanceInjections
 
 ROLES = ("USER", "SUPERVISOR", "ADMIN")
 
@@ -24,12 +25,18 @@ class OperationInterditeError(Exception):
 class AdminService:
     """Gestion des comptes (F1), réservée aux administrateurs."""
 
-    def __init__(self, user_repo: UserRepository):
+    def __init__(self, user_repo: UserRepository, surveillance: SurveillanceInjections | None = None):
+        """
+        surveillance : renseigne, pour chaque compte, ses tentatives d'injection et s'il est
+                       signalé (comportement dangereux). Sans elle, les compteurs restent à 0.
+        """
         self._user_repo = user_repo
+        self._surveillance = surveillance
 
     async def lister(self, requester: User) -> list[User]:
+        """Tous les comptes, avec leurs tentatives d'injection."""
         self._verifier_admin(requester)
-        return await self._user_repo.find_all()
+        return await self._annoter(await self._user_repo.find_all())
 
     async def creer(self, requester: User, login: str, mot_de_passe: str, role: str) -> User:
         self._verifier_admin(requester)
@@ -45,7 +52,8 @@ class AdminService:
             raise LoginDejaPrisError("Ce login existe déjà")
 
         await self._user_repo.create(login, hasher_mot_de_passe(mot_de_passe), role)
-        return await self._user_repo.find_by_login(login)
+        (cree,) = await self._annoter([await self._user_repo.find_by_login(login)])
+        return cree
 
     async def changer_role(self, requester: User, user_id: int, role: str) -> User:
         self._verifier_admin(requester)
@@ -104,10 +112,18 @@ class AdminService:
         return role
 
     async def _trouver(self, user_id: int) -> User:
+        """Le compte demandé, avec ses tentatives d'injection (CompteIntrouvableError s'il n'existe pas)."""
         user = await self._user_repo.find_by_id(user_id)
         if user is None:
             raise CompteIntrouvableError("Compte introuvable")
+        (user,) = await self._annoter([user])
         return user
+
+    async def _annoter(self, users: list[User]) -> list[User]:
+        """Ajoute aux comptes leur nombre de tentatives d'injection et leur signalement."""
+        if self._surveillance is None:
+            return users
+        return await self._surveillance.annoter(users)
 
     async def _verifier_autre_admin(self, cible: User) -> None:
         """Si la cible est un administrateur actif, un autre administrateur actif doit rester."""

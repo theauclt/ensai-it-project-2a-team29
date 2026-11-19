@@ -52,6 +52,23 @@ def init_db():
             ADD COLUMN IF NOT EXISTS juge_statut VARCHAR(20),
             ADD COLUMN IF NOT EXISTS juge_type VARCHAR(50);
         """)
+        # Tentatives d'injection de prompt : un document suspect compte une fois par compte
+        # (UNIQUE). Seule l'empreinte du document est gardée, jamais son contenu.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tentatives_injection (
+                id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                user_id INTEGER,
+                date_tentative TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                hash_document VARCHAR(64) NOT NULL,
+                types_injection TEXT NOT NULL DEFAULT '',
+
+                CONSTRAINT uq_tentative_user_document UNIQUE (user_id, hash_document),
+                CONSTRAINT fk_tentatives_user
+                    FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            );
+        """)
         # Bases créées avant ce changement : on remplace la clé étrangère en cascade.
         # Sans danger si on la relance (la contrainte est supprimée puis recréée).
         cursor.execute("""
@@ -70,4 +87,4 @@ def init_db():
 if __name__ == "__main__":
     load_dotenv()  # lit POSTGRES_* depuis le fichier .env
     init_db()
-    print("Tables users et traitements prêtes.")
+    print("Tables users, traitements et tentatives_injection prêtes.")

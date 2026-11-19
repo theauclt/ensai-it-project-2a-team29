@@ -80,6 +80,19 @@ class AuthentificationService:
             self.__limiteur.enregistrer_succes(login)
         return user
 
+    async def utilisateur_actif(self, user_id: int) -> User | None:
+        """
+        Relit un compte en base, pour vérifier un jeton à chaque requête.
+
+        Returns:
+            User | None: le compte s'il existe et est actif, sinon None (compte supprimé, ou
+            désactivé par un administrateur ou après trop de tentatives d'injection).
+        """
+        user = await self.__user_repository.find_by_id(user_id)
+        if user is None or not user.est_active:
+            return None
+        return user
+
     async def creer_admin_initial(self, login: str, mot_de_passe: str) -> bool:
         """
         Crée le compte administrateur initial s'il n'existe pas encore.

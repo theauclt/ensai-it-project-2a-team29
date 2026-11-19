@@ -10,6 +10,9 @@ from psycopg.rows import dict_row
 
 from anonymia.persistence.dao import db_connexion
 from anonymia.persistence.postgres_archive_repository import PostgresArchiveRepository
+from anonymia.persistence.postgres_tentative_injection_repository import (
+    PostgresTentativeInjectionRepository,
+)
 from anonymia.persistence.postgres_user_repository import PostgresUserRepository
 from anonymia.service.business_objects.audit_entry import AuditEntry
 from tests.fakes import FakePool
@@ -147,3 +150,44 @@ def test_le_pool_est_cree_ferme_et_renvoie_des_dictionnaires(env_postgres):
     assert pool.kwargs["row_factory"] is dict_row
     assert pool.kwargs["options"] == db_connexion.parametres_connexion()["options"]
     assert (pool.min_size, pool.max_size) == (db_connexion.POOL_MIN, db_connexion.POOL_MAX)
+
+
+# ---------------------------------------------------------------------------
+# Tentatives d'injection
+# ---------------------------------------------------------------------------
+
+
+async def test_tentative_enregistree_une_fois_par_compte_et_par_document(pool):
+    date = datetime(2026, 1, 1, tzinfo=UTC)
+
+    await PostgresTentativeInjectionRepository(pool).enregistrer(
+        1, "h" * 64, ["ignore_instructions", "role_change"], date
+    )
+
+    requete, params = pool.connexion.requetes[0]
+    assert requete.startswith("INSERT INTO tentatives_injection")
+    assert "ON CONFLICT (user_id, hash_document) DO NOTHING" in requete
+    assert params == (1, date, "h" * 64, "ignore_instructions,role_change")
+    assert pool.connexion.commits == 1
+
+
+async def test_tentatives_comptees_pour_un_compte(pool):
+    pool.connexion.ligne = {"nb": 4}
+
+    assert await PostgresTentativeInjectionRepository(pool).compter(7) == 4
+    requete, params = pool.connexion.requetes[0]
+    assert "COUNT(*)" in requete and "WHERE user_id = %s" in requete
+    assert params == (7,)
+
+
+async def test_tentatives_comptees_sans_ligne_renvoie_zero(pool):
+    pool.connexion.ligne = None
+
+    assert await PostgresTentativeInjectionRepository(pool).compter(7) == 0
+
+
+async def test_tentatives_comptees_par_utilisateur(pool):
+    pool.connexion.lignes = [{"user_id": 1, "nb": 3}, {"user_id": 4, "nb": 10}]
+
+    assert await PostgresTentativeInjectionRepository(pool).compter_par_utilisateur() == {1: 3, 4: 10}
+    assert "GROUP BY user_id" in pool.connexion.requetes[0][0]
