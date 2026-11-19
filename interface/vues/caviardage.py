@@ -181,7 +181,10 @@ def _volet_confirmation(resultat: dict, perime: bool) -> None:
         f'<div class="an-categories">{puces}</div>'
         '<p style="margin-top:14px">Si le document est légitime (une citation, un exemple de sécurité…), '
         "vous pouvez le caviarder quand même. Le traitement sera signalé dans l'historique "
-        "et le résultat devra être relu.</p></div>"
+        "et le résultat devra être relu.</p>"
+        '<p style="margin-top:14px">Chaque document suspect est compté pour votre compte : '
+        "à partir de 3, il est signalé aux administrateurs ; à 10, il est désactivé "
+        "jusqu'à ce qu'un administrateur le réactive.</p></div>"
     )
     col_confirmer, col_annuler, _ = st.columns([1.5, 1, 1], gap="small")
     confirmer = col_confirmer.button(

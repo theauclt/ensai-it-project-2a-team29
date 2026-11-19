@@ -59,7 +59,8 @@ class ApiClient:
           pii             : liste de PII (clés texte, type, debut, fin, detecteur) ;
           mode_degrade    : True si le LLM n'a pas répondu (seules les règles ont tourné) ;
           types_injection : catégories d'injection de prompt repérées (vide sinon).
-        Aucune trace n'est archivée côté API pour une simple analyse.
+        Aucun traitement n'est archivé pour une simple analyse, mais un texte suspect d'injection
+        compte comme une tentative pour le compte (ApiError 403 si le compte vient d'être désactivé).
         """
         donnees = self._objet(self._requete("POST", "/documents/analyser", json={"contenu": contenu}))
         if not isinstance(donnees.get("pii"), list):
@@ -126,7 +127,12 @@ class ApiClient:
         return self._liste(reponse)
 
     def utilisateurs(self) -> list[dict]:
-        """GET /admin/utilisateurs : liste des comptes (réservé aux ADMIN, sinon ApiError 403)."""
+        """
+        GET /admin/utilisateurs : liste des comptes (réservé aux ADMIN, sinon ApiError 403).
+
+        Chaque compte contient aussi tentatives_injection (documents suspects envoyés) et
+        comportement_dangereux (vrai à partir de 3 tentatives).
+        """
         return self._liste(self._requete("GET", "/admin/utilisateurs"))
 
     def creer_utilisateur(self, login: str, mot_de_passe: str, role: str) -> dict:
