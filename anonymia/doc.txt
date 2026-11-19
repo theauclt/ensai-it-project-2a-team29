@@ -211,8 +211,10 @@ Aucun outil a installer : tout se fait dans la page.
                                               "mot_de_passe": "...", "role": "USER"}
    PATCH  /admin/utilisateurs/{id}/role       corps : {"role": "SUPERVISOR"}
    PATCH  /admin/utilisateurs/{id}/activation corps : {"est_active": false}
-   DELETE /admin/utilisateurs/{id}            supprime le compte ET ses traitements
-                                              archives (preferer la desactivation)
+   DELETE /admin/utilisateurs/{id}            supprime le compte (ses traitements
+                                              restent dans l'historique, sans nom
+                                              d'utilisateur ; preferer la desactivation
+                                              pour seulement bloquer l'acces)
    L'id se lit dans la reponse de GET /admin/utilisateurs.
 
 4) Se connecter avec un autre compte (par exemple un simple utilisateur)

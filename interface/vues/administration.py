@@ -145,8 +145,9 @@ with onglet_comptes:
     if not c_est_moi:
         with st.expander("🗑️ Supprimer ce compte (irréversible)"):
             st.warning(
-                "La suppression efface aussi tous les traitements archivés de ce compte, "
-                "donc une partie de l'historique. Préférez la désactivation."
+                "La suppression est définitive : le compte ne pourra plus se connecter. "
+                "Ses traitements restent dans l'historique, mais sans nom d'utilisateur. "
+                "Pour seulement bloquer l'accès, préférez la désactivation."
             )
             with st.form(f"suppression_{cible['id']}"):
                 saisie = st.text_input(f"Pour confirmer, tapez l'identifiant : {cible['login']}")
