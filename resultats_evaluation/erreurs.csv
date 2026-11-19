@@ -1,0 +1,56 @@
+doc_id,erreur,type,texte,detecteur,type_document
+doc_008.txt,faux_negatif,JOB_TITLE,chef du service comptabilité,,cas_limite_cercle3
+doc_016.md,faux_negatif,ORG,"Direction départementale de l'emploi, du travail et des solidarités du Nord",,rapport_long
+doc_016.md,faux_negatif,PERSON,Farid Ouattara,,rapport_long
+doc_016.md,faux_negatif,JOB_TITLE,chargé de mission insertion,,rapport_long
+doc_016.md,faux_negatif,ORG,la Maison de l'emploi de Roubaix,,rapport_long
+doc_016.md,faux_negatif,ADDRESS_FULL,"11 rue des Écoles, 59100 Roubaix",,rapport_long
+doc_016.md,faux_negatif,PERSON,M. Alassane Diouf,,rapport_long
+doc_016.md,faux_negatif,DATE_OF_BIRTH,9 avril 1978,,rapport_long
+doc_016.md,faux_negatif,PERSON,M. Diouf,,rapport_long
+doc_016.md,faux_negatif,ORG,l'URSSAF Hauts-de-France,,rapport_long
+doc_018.txt,faux_negatif,PERSON,Mme Ingrid Vanhove,,convocation
+doc_018.txt,faux_negatif,ADDRESS_FULL,"4 place de la Mairie, 76600 Le Havre",,convocation
+doc_018.txt,faux_negatif,JOB_TITLE,instructeur de dossiers,,convocation
+doc_019.txt,faux_positif,JOB_TITLE,président de la République,LLMDetector,cas_limite_cercle3
+doc_019.txt,faux_positif,PERSON,Emmanuel,LLMDetector,cas_limite_cercle3
+doc_019.txt,faux_positif,ORG,Journal officiel,LLMDetector,cas_limite_cercle3
+doc_022.txt,faux_negatif,LOCATION,place Bellecour,,note_courte
+doc_026.md,faux_negatif,JOB_TITLE,technicienne de réseau,,attestation
+doc_034.txt,faux_negatif,PERSON,Pierre Dupont,,adversarial
+doc_034.txt,faux_negatif,LOCATION,Lyon,,adversarial
+doc_036.txt,faux_negatif,ORG,Syndicat intercommunal d'assainissement du Bas-Rhin,,mandat_prelevement
+doc_036.txt,faux_negatif,PERSON,Émilie Kaltenbach,,mandat_prelevement
+doc_036.txt,faux_negatif,ADDRESS_FULL,"7 quai de la Loire, 67000 Strasbourg",,mandat_prelevement
+doc_036.txt,faux_negatif,LOCATION,Strasbourg,,mandat_prelevement
+doc_036.txt,faux_negatif,PERSON,E. Kaltenbach,,mandat_prelevement
+doc_037.txt,faux_negatif,PERSON,Ronan Quéffelec,,courrier_administratif
+doc_038.txt,faux_positif,PERSON,Pierre,LLMDetector,adversarial
+doc_038.txt,faux_positif,PERSON,Paul,LLMDetector,adversarial
+doc_043.txt,faux_negatif,LOCATION,Sablé-sur-Sarthe,,compte_rendu_reunion
+doc_043.txt,faux_positif,ORG,mairie de Sablé-sur-Sarthe,LLMDetector,compte_rendu_reunion
+doc_046.txt,faux_negatif,JOB_TITLE,formatrice indépendante,,facture
+doc_050.md,faux_negatif,ORG,le tribunal administratif de Strasbourg,,courrier_administratif
+doc_050.md,faux_positif,LOCATION,France,LLMDetector,courrier_administratif
+doc_058.txt,faux_negatif,ORG,le Service des affaires générales de la ville d'Annecy,,adversarial
+doc_061.md,faux_negatif,JOB_TITLE,chargé de mission logement,,cas_limite_cercle3
+doc_062.md,faux_negatif,PERSON,Aurélien Beaupuy,,adversarial
+doc_062.md,faux_negatif,DATE_OF_BIRTH,30 juin 1988,,adversarial
+doc_062.md,faux_negatif,ADDRESS_FULL,"6 rue des Écoles, 63000 Clermont-Ferrand",,adversarial
+doc_062.md,faux_negatif,ORG,Caisse d'allocations familiales du Puy-de-Dôme,,adversarial
+doc_063.txt,faux_positif,ORG,service contrôle,LLMDetector,adversarial
+doc_067.txt,faux_negatif,PERSON,Sarah Benamara,,demande_etat_civil
+doc_067.txt,faux_negatif,DATE_OF_BIRTH,8 mai 1990,,demande_etat_civil
+doc_067.txt,faux_negatif,LOCATION,Bourges,,demande_etat_civil
+doc_067.txt,faux_negatif,ADDRESS_FULL,"17 boulevard Gambetta, 18000 Bourges",,demande_etat_civil
+doc_067.txt,faux_negatif,PERSON,Louise Benamara,,demande_etat_civil
+doc_067.txt,faux_negatif,DATE_OF_BIRTH,2 décembre 1931,,demande_etat_civil
+doc_067.txt,faux_negatif,LOCATION,Vierzon,,demande_etat_civil
+doc_067.txt,faux_negatif,ORG,Service de l'état civil de la mairie de Vierzon,,demande_etat_civil
+doc_068.txt,faux_negatif,ORG,Inspection générale des services de la métropole de Rouen Normandie,,rapport_tres_long
+doc_068.txt,faux_negatif,PERSON,Anne-Claire Dufresne,,rapport_tres_long
+doc_068.txt,faux_negatif,JOB_TITLE,inspectrice des services,,rapport_tres_long
+doc_068.txt,faux_negatif,PERSON,Mme Fatoumata Sylla,,rapport_tres_long
+doc_068.txt,faux_negatif,ADDRESS_FULL,"15 rue Jean Jaurès, 76600 Le Havre",,rapport_tres_long
+doc_068.txt,faux_negatif,PERSON,Mme Sylla,,rapport_tres_long
+doc_068.txt,faux_negatif,JOB_TITLE,directeur général des services,,rapport_tres_long
