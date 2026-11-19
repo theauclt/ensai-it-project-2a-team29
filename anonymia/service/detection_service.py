@@ -71,24 +71,37 @@ class DetectionService:
         spans, detectors_ok = await self._run_detectors(content)
         return self._merge_spans(spans), detectors_ok
 
-    def injection_types(self, content: str) -> list[str]:
-        """Catégories d'injection de prompt repérées dans le texte (vide si rien de suspect)."""
-        return self._injection_detector.detect(content)
-
-    async def verifier_injection(self, content: str, user_id: int) -> list[str]:
+    async def verifier_injection(
+        self,
+        content: str,
+        user_id: int,
+        en_attente_confirmation: bool = False,
+        confirmation: bool = False,
+    ) -> list[str]:
         """
         Passe le document au filtre d'injection, avant tout appel au LLM.
 
-        Si le document est suspect, la tentative est comptée pour ce compte (une seule fois par
-        document). Au seuil de désactivation, le compte est désactivé et CompteDesactiveError
-        est levée : le document n'est pas traité.
+        Si le document est suspect, la tentative est comptée pour ce compte. Au seuil de
+        désactivation, le compte est désactivé et CompteDesactiveError est levée : le document
+        n'est pas traité.
+
+        en_attente_confirmation : le document sera bloqué jusqu'à confirmation (/caviarder).
+        confirmation            : le document est renvoyé avec confirmation ; s'il suit un
+                                  blocage du même document, il ne compte pas une seconde fois.
+        Pour /analyser (pas de confirmation), les deux restent à False.
 
         Returns:
             list[str]: les catégories d'injection repérées (vide si rien de suspect).
         """
         injection_types = self._injection_detector.detect(content)
         if injection_types and self._surveillance is not None:
-            await self._surveillance.signaler(user_id, _empreinte(content), injection_types)
+            await self._surveillance.signaler(
+                user_id,
+                _empreinte(content),
+                injection_types,
+                en_attente_confirmation=en_attente_confirmation,
+                confirmation=confirmation,
+            )
         return injection_types
 
     async def detect(
@@ -102,7 +115,9 @@ class DetectionService:
 
         # Filtre d'injection avant les détecteurs (donc avant le LLM). Un compte qui atteint le
         # seuil de tentatives est désactivé ici (CompteDesactiveError) : rien n'est traité.
-        injection_types = await self.verifier_injection(content, user_id)
+        injection_types = await self.verifier_injection(
+            content, user_id, en_attente_confirmation=not confirmed, confirmation=confirmed
+        )
         if injection_types and not confirmed:
             return AnonymizationResult(
                 document=None,

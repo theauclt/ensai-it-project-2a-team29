@@ -52,8 +52,9 @@ def init_db():
             ADD COLUMN IF NOT EXISTS juge_statut VARCHAR(20),
             ADD COLUMN IF NOT EXISTS juge_type VARCHAR(50);
         """)
-        # Tentatives d'injection de prompt : un document suspect compte une fois par compte
-        # (UNIQUE). Seule l'empreinte du document est gardée, jamais son contenu.
+        # Tentatives d'injection de prompt : une ligne par envoi suspect. Un document bloqué
+        # (en_attente_confirmation) puis confirmé ne fait qu'une ligne. Seule l'empreinte du
+        # document est gardée, jamais son contenu.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS tentatives_injection (
                 id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -61,13 +62,26 @@ def init_db():
                 date_tentative TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 hash_document VARCHAR(64) NOT NULL,
                 types_injection TEXT NOT NULL DEFAULT '',
+                en_attente_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
 
-                CONSTRAINT uq_tentative_user_document UNIQUE (user_id, hash_document),
                 CONSTRAINT fk_tentatives_user
                     FOREIGN KEY (user_id)
                     REFERENCES users(id)
                     ON DELETE SET NULL
             );
+        """)
+        # Tables créées par la première version : un même document ne comptait qu'une fois
+        # (contrainte UNIQUE). Désormais chaque envoi compte.
+        cursor.execute("""
+            ALTER TABLE tentatives_injection DROP CONSTRAINT IF EXISTS uq_tentative_user_document;
+        """)
+        cursor.execute("""
+            ALTER TABLE tentatives_injection
+            ADD COLUMN IF NOT EXISTS en_attente_confirmation BOOLEAN NOT NULL DEFAULT FALSE;
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tentatives_user_document
+            ON tentatives_injection (user_id, hash_document);
         """)
         # Bases créées avant ce changement : on remplace la clé étrangère en cascade.
         # Sans danger si on la relance (la contrainte est supprimée puis recréée).

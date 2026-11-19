@@ -45,8 +45,9 @@ CREATE TABLE traitements (
 -- =========================
 -- TABLE TENTATIVES_INJECTION
 -- =========================
--- Un document suspect d'injection de prompt compte une seule fois par compte (UNIQUE).
--- Seule l'empreinte du document est gardée. 3 tentatives : compte signalé ; 10 : désactivé.
+-- Une ligne par envoi d'un document suspect d'injection de prompt. Un document bloqué
+-- (en_attente_confirmation) puis confirmé ne fait qu'une ligne. Seule l'empreinte du document
+-- est gardée. 3 tentatives : compte signalé ; 10 : compte désactivé.
 
 CREATE TABLE tentatives_injection (
     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -54,10 +55,12 @@ CREATE TABLE tentatives_injection (
     date_tentative TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     hash_document VARCHAR(64) NOT NULL,
     types_injection TEXT NOT NULL DEFAULT '',
+    en_attente_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
 
-    CONSTRAINT uq_tentative_user_document UNIQUE (user_id, hash_document),
     CONSTRAINT fk_tentatives_user
         FOREIGN KEY (user_id)
         REFERENCES users(id)
         ON DELETE SET NULL
 );
+
+CREATE INDEX idx_tentatives_user_document ON tentatives_injection (user_id, hash_document);

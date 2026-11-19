@@ -118,6 +118,27 @@ def test_le_meme_document_bloque_puis_confirme_compte_une_fois(client):
     assert comptes(client)["alice"]["tentatives_injection"] == 1
 
 
+def test_le_meme_document_envoye_plusieurs_fois_compte_a_chaque_envoi(client):
+    entetes = en_tete(client, "alice")
+    corps = {"contenu": SUSPECT}
+
+    for _ in range(3):
+        client.post("/documents/caviarder", json=corps, headers=entetes)
+        client.post("/documents/caviarder", json={**corps, "confirmer": True}, headers=entetes)
+
+    alice = comptes(client)["alice"]
+    assert (alice["tentatives_injection"], alice["comportement_dangereux"]) == (3, True)
+
+
+def test_le_meme_document_analyse_plusieurs_fois_compte_a_chaque_envoi(client):
+    entetes = en_tete(client, "alice")
+
+    for _ in range(2):
+        client.post("/documents/analyser", json={"contenu": SUSPECT}, headers=entetes)
+
+    assert comptes(client)["alice"]["tentatives_injection"] == 2
+
+
 def test_les_analyses_comptent_aussi(client):
     reponse = injecter(client, en_tete(client, "alice"), 3, route="/documents/analyser")
 
