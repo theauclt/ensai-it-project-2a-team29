@@ -25,7 +25,7 @@ Depuis la racine du dépôt (le dossier qui contient `pyproject.toml`) :
     pip install -e ".[dev]"
 
 À refaire seulement si `pyproject.toml` change. Réactiver l'environnement à chaque nouveau terminal.
-Détecteur NER (facultatif) : `pip install spacy && python -m spacy download fr_core_news_lg`.
+Détecteur NER (facultatif) : `pip install -e ".[ner]"` puis `python -m spacy download fr_core_news_lg`.
 
 ## 3. Configuration
 

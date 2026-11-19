@@ -44,6 +44,17 @@ psycopg 3 : sans cela, l'API s'arrete avec "No module named 'psycopg'").
 Pensez a reactiver l'environnement (source .venv/bin/activate) a chaque
 nouveau terminal.
 
+Detecteur NER spaCy (facultatif). L'application marche tres bien sans lui : il
+n'est utilise que si NER_ENABLED=true dans .env (partie 3). Pour l'installer :
+
+    pip install -e ".[ner]"
+    python -m spacy download fr_core_news_lg
+
+La premiere commande installe la bibliotheque spaCy (declaree dans pyproject.toml,
+groupe "ner"). La seconde telecharge le modele de langue francais, qui ne passe
+pas par pip install ordinaire. Sans le modele, l'API refuse de demarrer quand
+NER_ENABLED=true.
+
 
 --------------------------------------------------------------------------------
 3. CONFIGURATION (fichier .env)
