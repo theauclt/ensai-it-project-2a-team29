@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from .business_objects.analysis_result import AnalysisResult
 from .business_objects.anonymization_result import AnonymizationResult
 from .business_objects.audit_entry import AuditEntry
 from .business_objects.injection_verdict import InjectionVerdict, metadonnees_juge
@@ -23,6 +24,9 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
+
+# Valeur de strategie_anonymisation dans l'audit pour les analyses (sans anonymisation)
+STRATEGIE_ANALYSE = "analyse"
 
 
 class DetectionService:
@@ -80,31 +84,94 @@ class DetectionService:
     ) -> AnonymizationResult:
         strategy = self._strategy_factory.get_strategy(strategy_name)
 
-        # Filtre d'injection avant les détecteurs (donc avant le LLM)
-        injection_types = self._injection_detector.detect(content)
-        if injection_types and not confirmed:
+        spans, injection_types, detectors_ok, verdict_juge = await self._inspecter(
+            content, confirmed
+        )
+        if spans is None:
             return AnonymizationResult(
                 document=None,
                 types_injection=injection_types,
                 confirmation_requise=True,
             )
 
+        anonymized = strategy.apply(content, spans)
+        await self._archiver(
+            content, user_id, strategy_name, spans, injection_types, detectors_ok, verdict_juge
+        )
+        return AnonymizationResult(
+            document=anonymized,
+            types_injection=injection_types,
+            detecteurs=detectors_ok,
+            verdict_juge=verdict_juge,
+        )
+
+    async def analyse(
+        self, content: str, user_id: int, confirmed: bool = False
+    ) -> AnalysisResult:
+        """
+        Repère les PII sans anonymiser (endpoint /documents/analyser).
+
+        Même chemin que detect : filtre d'injection avant le LLM, juge, puis entrée d'audit
+        (stratégie « analyse »). Aucun texte n'est envoyé au LLM sans trace.
+        """
+        spans, injection_types, detectors_ok, verdict_juge = await self._inspecter(
+            content, confirmed
+        )
+        if spans is None:
+            return AnalysisResult(
+                spans=None, types_injection=injection_types, confirmation_requise=True
+            )
+        await self._archiver(
+            content, user_id, STRATEGIE_ANALYSE, spans, injection_types, detectors_ok, verdict_juge
+        )
+        return AnalysisResult(
+            spans=spans,
+            types_injection=injection_types,
+            detecteurs=detectors_ok,
+            verdict_juge=verdict_juge,
+        )
+
+    async def _inspecter(
+        self, content: str, confirmed: bool
+    ) -> tuple[list[PIISpan] | None, list[str], list[str], InjectionVerdict | None]:
+        """
+        Étapes communes à detect et analyse : filtre d'injection, puis détection et juge.
+
+        Renvoie (spans, types d'injection, détecteurs ayant répondu, verdict du juge).
+        spans vaut None quand une confirmation est requise : rien n'a alors été envoyé
+        au LLM.
+        """
+        # Filtre d'injection avant les détecteurs (donc avant le LLM)
+        injection_types = self._injection_detector.detect(content)
+        if injection_types and not confirmed:
+            return None, injection_types, [], None
+
         # Le juge tourne en même temps que les détecteurs : on n'attend que le plus lent.
         # Ni _run_detectors ni _run_judge ne lèvent d'exception : une panne de l'un ne peut
-        # donc ni bloquer la détection ni empêcher l'anonymisation.
+        # donc ni bloquer la détection ni empêcher la suite.
         (spans, detectors_ok), verdict_juge = await asyncio.gather(
             self._run_detectors(content), self._run_judge(content)
         )
-        spans = self._merge_spans(spans)
-        anonymized = strategy.apply(content, spans)
-        juge_statut, juge_type = metadonnees_juge(verdict_juge)
+        return self._merge_spans(spans), injection_types, detectors_ok, verdict_juge
 
+    async def _archiver(
+        self,
+        content: str,
+        user_id: int,
+        strategie: str,
+        spans: list[PIISpan],
+        injection_types: list[str],
+        detectors_ok: list[str],
+        verdict_juge: InjectionVerdict | None,
+    ) -> None:
+        """Enregistre l'entrée d'audit (métadonnées seulement, jamais le contenu)."""
+        juge_statut, juge_type = metadonnees_juge(verdict_juge)
         await self._archive_repo.save(
             AuditEntry(
                 user_id=user_id,
                 date_traitement=datetime.now(UTC),
                 hash_document=hashlib.sha256(content.encode("utf-8")).hexdigest(),
-                strategie_anonymisation=strategy_name,
+                strategie_anonymisation=strategie,
                 detecteurs_contributeurs=",".join(detectors_ok),
                 nb_pii_detectees=len(spans),
                 injection_suspectee=bool(injection_types),
@@ -112,12 +179,6 @@ class DetectionService:
                 juge_statut=juge_statut,
                 juge_type=juge_type,
             )
-        )
-        return AnonymizationResult(
-            document=anonymized,
-            types_injection=injection_types,
-            detecteurs=detectors_ok,
-            verdict_juge=verdict_juge,
         )
 
     async def _run_judge(self, content: str) -> InjectionVerdict | None:

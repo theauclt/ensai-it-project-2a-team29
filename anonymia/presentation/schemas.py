@@ -36,6 +36,12 @@ class DocumentRequest(BaseModel):
     contenu: str = Field(min_length=1, max_length=100_000)
 
 
+class AnalyserRequest(DocumentRequest):
+    """Corps de POST /documents/analyser : le texte, et la confirmation en cas d'injection."""
+
+    confirmer: bool = False
+
+
 class CaviarderRequest(DocumentRequest):
     """Corps de POST /documents/caviarder : le texte et la stratégie choisie."""
 
@@ -54,17 +60,6 @@ class PIIResponse(BaseModel):
     confiance: float = Field(ge=0, le=1, description="Fiabilité de la détection, de 0 à 1")
 
 
-class AnalyseResponse(BaseModel):
-    """Réponse de POST /documents/analyser."""
-
-    pii: list[PIIResponse]
-    # Détecteurs qui ont répondu ; si le LLM n'y figure pas, l'analyse est en mode dégradé
-    detecteurs: list[str] = []
-    mode_degrade: bool = False
-    # Catégories d'injection de prompt repérées (l'analyse n'est pas bloquée pour autant)
-    types_injection: list[str] = []
-
-
 class VerdictJugeResponse(BaseModel):
     """
     Verdict du juge d'injection LLM : jamais son explication, qui pourrait recopier du contenu.
@@ -75,6 +70,20 @@ class VerdictJugeResponse(BaseModel):
 
     statut: Literal["detected", "not_detected", "unavailable"]
     type: str | None = Field(default=None, description="Type d'injection, seulement si statut = detected")
+
+
+class AnalyseResponse(BaseModel):
+    """Réponse de POST /documents/analyser."""
+
+    pii: list[PIIResponse]
+    # Détecteurs qui ont répondu ; si le LLM n'y figure pas, l'analyse est en mode dégradé
+    detecteurs: list[str] = []
+    mode_degrade: bool = False
+    # Catégories d'injection de prompt repérées. Sans confirmation, le document n'est pas analysé
+    types_injection: list[str] = []
+    confirmation_requise: bool = False
+    avertissements: list[str] = []
+    juge: VerdictJugeResponse | None = None
 
 
 class CaviardageResponse(BaseModel):

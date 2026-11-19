@@ -161,7 +161,9 @@ def test_analyser_renvoie_les_pii_avec_positions(client, archive):
     assert DOCUMENT[pii["debut"]:pii["fin"]] == pii["texte"] == "jean@mail.fr"
     assert pii["detecteur"] == "RegexDetector"
     assert pii["confiance"] == 1.0  # les expressions régulières sont toujours sûres
-    assert archive.entries == []  # analyser n'archive rien
+    (entree,) = archive.entries
+    assert entree.strategie_anonymisation == "analyse"
+    assert entree.nb_pii_detectees == 1
 
 
 def test_caviarder_masquage_et_archivage(client, archive):

@@ -6,9 +6,9 @@ from ..service.detection_service import DetectionService
 from .providers import get_detection_service
 from .schemas import (
     AnalyseResponse,
+    AnalyserRequest,
     CaviardageResponse,
     CaviarderRequest,
-    DocumentRequest,
     PIIResponse,
     StrategiesResponse,
     VerdictJugeResponse,
@@ -20,19 +20,47 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 # Sans réponse du LLM, seules les règles (regex) ont tourné : c'est le mode dégradé
 DETECTEUR_LLM = "LLMDetector"
 
+MESSAGE_CONFIRMATION = (
+    "Ce document contient des motifs ressemblant à une injection de prompt. "
+    "Il n'a pas été traité. Pour le traiter quand même, renvoyez la même "
+    'requête avec "confirmer": true (relecture humaine indispensable).'
+)
+
 
 @router.post("/analyser", response_model=AnalyseResponse)
 async def analyser(
-    body: DocumentRequest,
-    _user: User = Depends(get_current_user),
+    body: AnalyserRequest,
+    user: User = Depends(get_current_user),
     service: DetectionService = Depends(get_detection_service),
 ) -> AnalyseResponse:
-    """Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle)."""
-    spans, detecteurs = await service.analyze_with_status(body.contenu)
+    """
+    Renvoie la liste fusionnée des PII détectées (regex et LLM en parallèle).
+
+    Comme /caviarder : filtre d'injection avant le LLM (confirmation si suspect), juge
+    d'injection, et entrée dans l'historique (stratégie « analyse »).
+    """
+    resultat = await service.analyse(body.contenu, user.id, body.confirmer)
+    if resultat.confirmation_requise:
+        return AnalyseResponse(
+            pii=[],
+            confirmation_requise=True,
+            types_injection=resultat.types_injection,
+            avertissements=[MESSAGE_CONFIRMATION],
+        )
+    avertissements = []
+    if resultat.types_injection:
+        avertissements.append("Injection de prompt suspectée : relisez attentivement le résultat.")
+    statut_juge, type_juge = metadonnees_juge(resultat.verdict_juge)
+    if statut_juge == "detected":
+        avertissements.append(
+            "Le juge LLM a repéré une tentative de manipulation du système : relisez attentivement le résultat."
+        )
     return AnalyseResponse(
-        detecteurs=detecteurs,
-        mode_degrade=DETECTEUR_LLM not in detecteurs,
-        types_injection=service.injection_types(body.contenu),
+        detecteurs=resultat.detecteurs,
+        mode_degrade=DETECTEUR_LLM not in resultat.detecteurs,
+        types_injection=resultat.types_injection,
+        avertissements=avertissements,
+        juge=VerdictJugeResponse(statut=statut_juge, type=type_juge) if statut_juge else None,
         pii=[
             PIIResponse(
                 texte=s.text,
@@ -42,8 +70,8 @@ async def analyser(
                 detecteur=s.source_detector,
                 confiance=s.confidence,
             )
-            for s in spans
-        ]
+            for s in resultat.spans
+        ],
     )
 
 
@@ -64,13 +92,7 @@ async def caviarder(
         return CaviardageResponse(
             confirmation_requise=True,
             types_injection=resultat.types_injection,
-            avertissements=[
-                (
-                    "Ce document contient des motifs ressemblant à une injection de prompt. "
-                    "Il n'a pas été traité. Pour le traiter quand même, renvoyez la même "
-                    'requête avec "confirmer": true (relecture humaine indispensable).'
-                )
-            ],
+            avertissements=[MESSAGE_CONFIRMATION],
         )
     avertissements = []
     if resultat.types_injection:
