@@ -14,6 +14,7 @@ from .interfaces.archive_repository import ArchiveRepository
 from .interfaces.injection_judge import InjectionJudge
 from .interfaces.pii_detector import PIIDetector
 from .prompt_injector_detector import PromptInjectionDetector
+from .surveillance_injections import SurveillanceInjections
 from .types_pii import compter, vers_texte
 
 # Import utilisé uniquement pour le typage : pas de dépendance à l'exécution
@@ -29,6 +30,11 @@ logger = logging.getLogger(__name__)
 STRATEGIE_ANALYSE = "analyse"
 
 
+def _empreinte(content: str) -> str:
+    """Empreinte SHA-256 du document : identifie un document sans jamais conserver son contenu."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 class DetectionService:
     """
     Orchestre la détection des PII par tous les détecteurs, l'anonymisation
@@ -42,6 +48,7 @@ class DetectionService:
         archive_repo: ArchiveRepository,
         injection_detector: PromptInjectionDetector,
         injection_judge: InjectionJudge | None = None,
+        surveillance: SurveillanceInjections | None = None,
     ):
         self._detectors = detectors
         self._strategy_factory = strategy_factory
@@ -49,7 +56,9 @@ class DetectionService:
         self._injection_detector = injection_detector
         # Juge LLM facultatif (FO3) : sans juge, le service fonctionne comme avant
         self._injection_judge = injection_judge
-    
+        # Compte les tentatives d'injection de chaque compte (aucun comptage sans elle)
+        self._surveillance = surveillance
+
     def available_strategies(self) -> list[str]:
         """Noms des stratégies d'anonymisation disponibles (endpoint /documents/strategies)."""
         return self._strategy_factory.available_strategies()
@@ -88,7 +97,8 @@ class DetectionService:
         en_attente_confirmation : le document sera bloqué jusqu'à confirmation (/caviarder).
         confirmation            : le document est renvoyé avec confirmation ; s'il suit un
                                   blocage du même document, il ne compte pas une seconde fois.
-        Pour /analyser (pas de confirmation), les deux restent à False.
+        /analyser et /caviarder passent par le même chemin : un document suspect est bloqué
+        jusqu'à confirmation, et la confirmation ne compte pas une seconde fois.
 
         Returns:
             list[str]: les catégories d'injection repérées (vide si rien de suspect).
@@ -113,12 +123,13 @@ class DetectionService:
     ) -> AnonymizationResult:
         strategy = self._strategy_factory.get_strategy(strategy_name)
 
-        # Filtre d'injection avant les détecteurs (donc avant le LLM). Un compte qui atteint le
-        # seuil de tentatives est désactivé ici (CompteDesactiveError) : rien n'est traité.
-        injection_types = await self.verifier_injection(
-            content, user_id, en_attente_confirmation=not confirmed, confirmation=confirmed
+        # Filtre d'injection (et comptage des tentatives) avant les détecteurs, donc avant le
+        # LLM. Un compte qui atteint le seuil est désactivé ici (CompteDesactiveError) : rien
+        # n'est traité.
+        spans, injection_types, detectors_ok, verdict_juge = await self._inspecter(
+            content, user_id, confirmed
         )
-        if injection_types and not confirmed:
+        if spans is None:
             return AnonymizationResult(
                 document=None,
                 types_injection=injection_types,
@@ -142,11 +153,12 @@ class DetectionService:
         """
         Repère les PII sans anonymiser (endpoint /documents/analyser).
 
-        Même chemin que detect : filtre d'injection avant le LLM, juge, puis entrée d'audit
-        (stratégie « analyse »). Aucun texte n'est envoyé au LLM sans trace.
+        Même chemin que detect : filtre d'injection avant le LLM (avec comptage des tentatives
+        et confirmation si le document est suspect), juge, puis entrée d'audit (stratégie
+        « analyse »). Aucun texte n'est envoyé au LLM sans trace.
         """
         spans, injection_types, detectors_ok, verdict_juge = await self._inspecter(
-            content, confirmed
+            content, user_id, confirmed
         )
         if spans is None:
             return AnalysisResult(
@@ -163,7 +175,7 @@ class DetectionService:
         )
 
     async def _inspecter(
-        self, content: str, confirmed: bool
+        self, content: str, user_id: int, confirmed: bool
     ) -> tuple[list[PIISpan] | None, list[str], list[str], InjectionVerdict | None]:
         """
         Étapes communes à detect et analyse : filtre d'injection, puis détection et juge.
@@ -173,7 +185,9 @@ class DetectionService:
         au LLM.
         """
         # Filtre d'injection avant les détecteurs (donc avant le LLM)
-        injection_types = self._injection_detector.detect(content)
+        injection_types = await self.verifier_injection(
+            content, user_id, en_attente_confirmation=not confirmed, confirmation=confirmed
+        )
         if injection_types and not confirmed:
             return None, injection_types, [], None
 
@@ -201,7 +215,7 @@ class DetectionService:
             AuditEntry(
                 user_id=user_id,
                 date_traitement=datetime.now(UTC),
-                hash_document=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                hash_document=_empreinte(content),
                 strategie_anonymisation=strategie,
                 detecteurs_contributeurs=",".join(detectors_ok),
                 nb_pii_detectees=len(spans),
