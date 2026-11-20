@@ -11,6 +11,9 @@ class PseudonymizationStrategy(AnonymisationStrategy):
     quelle que soit sa casse, ses accents ou son écriture ("DUPONT", "Dupont"
     et "dupont" désignent la même personne, "06 12 34 56 78" et "06.12.34.56.78"
     le même numéro).
+
+    Un pseudonyme ne reprend jamais une valeur réelle du document : pour « Camille Martin »,
+    le pseudonyme n'est pas « Camille Martin » même si ce nom est en tête des listes.
     """
 
     PRENOMS = [  # noqa: RUF012
@@ -47,6 +50,12 @@ class PseudonymizationStrategy(AnonymisationStrategy):
         # Un compteur par groupe, repart de zéro à chaque document
         counters: dict[str, int] = {}
 
+        # Valeurs réelles du document, par groupe : un pseudonyme ne doit jamais en reprendre une
+        originaux = {
+            (self.GROUPES.get(span.type, span.type), normalize_key(span.type, span.text))
+            for span in spans
+        }
+
         replacements_to_apply = []
 
         # Attribution des pseudonymes dans l'ordre d'apparition (le premier a le numéro 1)
@@ -58,7 +67,7 @@ class PseudonymizationStrategy(AnonymisationStrategy):
             )
 
             if key not in replacements:
-                replacements[key] = self._generate_pseudonym(span, counters)
+                replacements[key] = self._generate_pseudonym(span, counters, originaux)
 
             replacements_to_apply.append((span, replacements[key]))
 
@@ -72,17 +81,24 @@ class PseudonymizationStrategy(AnonymisationStrategy):
 
         return content
 
-    def _generate_pseudonym(self, span: PIISpan, counters: dict[str, int]) -> str:
-        """Choisit la méthode de pseudonymisation selon le type de PII."""
+    def _generate_pseudonym(
+        self,
+        span: PIISpan,
+        counters: dict[str, int],
+        originaux: frozenset[tuple[str, str]] | set[tuple[str, str]] = frozenset(),
+    ) -> str:
+        """
+        Choisit la méthode de pseudonymisation selon le type de PII.
+
+        originaux : couples (groupe, clé) des valeurs réelles du document. Si le pseudonyme
+        prévu en fait partie (par exemple « Camille » pour un document qui contient Camille),
+        on passe au numéro suivant.
+        """
         groupe = self.GROUPES.get(span.type)
 
         # Évite de laisser passer une PII détectée mais non prise en charge
         if groupe is None:
             raise ValueError(f"Type de PII non pris en charge : {span.type}")
-
-        # Incrémente le compteur du groupe : c'est le numéro du pseudonyme
-        counters[groupe] = counters.get(groupe, 0) + 1
-        index = counters[groupe]
 
         generateurs = {
             "EMAIL": self._pseudonymize_email,
@@ -98,7 +114,13 @@ class PseudonymizationStrategy(AnonymisationStrategy):
             "DATE_NAISSANCE": self._pseudonymize_date,
             "POSTE": self._pseudonymize_poste,
         }
-        return generateurs[groupe](index)
+
+        while True:
+            # Incrémente le compteur du groupe : c'est le numéro du pseudonyme
+            counters[groupe] = counters.get(groupe, 0) + 1
+            pseudonyme = generateurs[groupe](counters[groupe])
+            if (groupe, normalize_key(span.type, pseudonyme)) not in originaux:
+                return pseudonyme
 
     # ------------------------------------------------------------------
     # Formats fixes (regex)
