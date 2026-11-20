@@ -7,7 +7,8 @@ Usage (depuis la racine du dépôt) :
     python -m scripts.evaluer_corpus corpus-test --sortie resultats
 
 Écrit dans le dossier de sortie : metriques.md (tableaux pour le rapport),
-metriques.json, details_par_document.csv et erreurs.csv (faux positifs/négatifs).
+metriques.json, details_par_document.csv, erreurs.csv (faux positifs/négatifs)
+et graphiques/*.png (matrice de confusion, précision/rappel, etc. ; nécessite matplotlib).
 Aucune base de données n'est utilisée : seul le pipeline de détection est évalué.
 """
 import argparse
@@ -143,6 +144,7 @@ async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
     sans_pii = {"docs": 0, "docs_avec_fp": 0, "fp": 0}
     securite_lignes = []
     pannes = 0
+    confusion = defaultdict(int)  # (type attendu ou "FAUX POSITIF", type prédit ou "NON DÉTECTÉ")
 
     for doc_id in sorted(manifest):
         meta = manifest[doc_id]
@@ -181,11 +183,14 @@ async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
                 if trouve:
                     par_cercle[g["cercle"]][0] += 1
                     par_type[g["pii_type"]]["tp"] += 1
+                    confusion[(g["pii_type"], g["pii_type"])] += 1
                     par_type[g["pii_type"]]["tp_strict"] += exact
                     tp += 1
                 else:
                     par_type[g["pii_type"]]["fn"] += 1
                     fn += 1
+                    autres = [p["type"] for p in preds if chevauche((p["start"], p["end"]), rang)]
+                    confusion[(g["pii_type"], autres[0] if autres else "NON DÉTECTÉ")] += 1
                     erreurs.append([doc_id, "faux_negatif", g["pii_type"], g["text"], "", meta["type_document"]])
         for p in preds:
             rang = (p["start"], p["end"])
@@ -201,6 +206,8 @@ async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
                 continue
             par_type[p["type"]]["fp"] += 1
             fp += 1
+            if not any(chevauche(rang, (g["start"], g["end"])) for g in gold):
+                confusion[("FAUX POSITIF", p["type"])] += 1
             erreurs.append([doc_id, "faux_positif", p["type"], p["texte"], p["detecteur"], meta["type_document"]])
 
         for table, cle in ((par_longueur, meta["categorie_longueur"]), (par_doc_type, meta["type_document"])):
@@ -301,6 +308,13 @@ async def evaluer(corpus: Path, avec_llm: bool, sortie: Path) -> None:
            "Faux positifs : " + (", ".join(fi["faux_positifs_docs"]) or "aucun")]
     (sortie / "metriques.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md))
+    try:
+        from scripts.graphiques_evaluation import tout_tracer
+
+        fichiers = tout_tracer(resultats, confusion, sorted(perimetre), sortie / "graphiques")
+        print("\nGraphiques : " + ", ".join(str(f) for f in fichiers))
+    except ImportError:
+        print("\nGraphiques non générés : pip install matplotlib")
     await service.aclose()
 
 

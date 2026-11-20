@@ -18,7 +18,7 @@ def span(texte, type_, contenu, debut=None):
         ("FR7630006000011234567890189", "IBAN", "FR00" + "0" * 20 + "001"),
         ("AB-123-CD", "PLAQUE_ACTUELLE", "XX-001-XX"),
         ("Claire", "PRENOM", "Camille"),
-        ("Martin", "NOM", "Martin"),
+        ("Dupont", "NOM", "Martin"),
         ("Nantes", "LIEU", "Commune 1"),
         ("Mairie", "ORGANISATION", "Organisation 1"),
         ("12 rue des Lilas", "ADRESSE", "1 rue de l'Exemple"),
@@ -41,6 +41,16 @@ def test_les_noms_en_majuscules_restent_en_majuscules():
     resultat = PseudonymizationStrategy().apply(contenu, spans)
 
     assert resultat == "MARTIN et Martin"  # même personne, casse d'origine respectée
+
+
+def test_un_nom_reel_de_la_liste_nest_pas_remplace_par_lui_meme():
+    contenu = "Martin et Durand"
+    spans = [span("Martin", "NOM", contenu, 0), span("Durand", "NOM", contenu, 10)]
+
+    resultat = PseudonymizationStrategy().apply(contenu, spans)
+
+    # Martin et Durand sont dans la liste : leurs propres pseudonymes sont sautés
+    assert resultat == "Bernard et Dubois"
 
 
 def test_apres_un_tour_complet_un_suffixe_evite_les_doublons():
