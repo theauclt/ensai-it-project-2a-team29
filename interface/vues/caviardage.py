@@ -7,8 +7,8 @@ caviardé), et en dessous le détail des détections ou des remplacements.
 
 Deux situations sont signalées par un bandeau au-dessus des volets :
 - le mode dégradé : le LLM n'a pas répondu, seules les règles automatiques ont tourné ;
-- l'injection de prompt : le texte contient des consignes destinées au LLM. Le caviardage
-  est alors suspendu par l'API jusqu'à ce que l'utilisateur confirme.
+- l'injection de prompt : le texte contient des consignes destinées au LLM. L'analyse et le
+  caviardage sont alors suspendus par l'API jusqu'à ce que l'utilisateur confirme.
 
 Rappel Streamlit : le script est relancé à chaque clic. Ce qui doit survivre d'un clic
 à l'autre (le texte, le dernier résultat) est donc rangé dans st.session_state.
@@ -140,16 +140,16 @@ def _bandeaux(resultat: dict) -> None:
         )
     elif categories:
         theme.alerte(
-            "Injection de prompt suspectée",
-            "Ce texte contient des consignes adressées au LLM. L'analyse a eu lieu, mais le caviardage "
-            "vous demandera une confirmation et le résultat devra être relu.",
+            "Analysé malgré une injection de prompt suspectée",
+            "Vous avez confirmé l'analyse. Elle est signalée dans l'historique : "
+            "relisez attentivement le résultat.",
             categories,
         )
-    juge = resultat.get("juge") if resultat["type"] == "caviardage" else None
+    juge = resultat.get("juge")
     if juge and juge["statut"] == "detected":
         theme.alerte(
             "Le juge LLM a repéré une tentative de manipulation",
-            "Le caviardage a eu lieu normalement, mais ce document semble chercher à détourner le "
+            "Le traitement a eu lieu normalement, mais ce document semble chercher à détourner le "
             "détecteur. Il est signalé dans l'historique : relisez attentivement le résultat avant de le diffuser.",
             _categories([juge["type"]] if juge.get("type") else []),
             grave=True,
@@ -157,7 +157,7 @@ def _bandeaux(resultat: dict) -> None:
     elif juge and juge["statut"] == "unavailable":
         theme.alerte(
             "Juge d'injection indisponible",
-            "Le second contrôle contre les tentatives de manipulation n'a pas pu avoir lieu. Le caviardage "
+            "Le second contrôle contre les tentatives de manipulation n'a pas pu avoir lieu. Le traitement "
             "n'est pas affecté, mais l'absence d'alerte ne prouve pas que le document est sûr.",
         )
     if resultat.get("mode_degrade"):
@@ -171,16 +171,18 @@ def _bandeaux(resultat: dict) -> None:
 
 def _volet_confirmation(resultat: dict, perime: bool) -> None:
     """Volet de droite quand l'API a suspendu le caviardage pour injection de prompt."""
+    analyse = resultat.get("origine") == "analyse"
+    verbe = "analysé" if analyse else "caviardé"
     _entete_volet("Document non traité", pastille="Texte modifié depuis ce contrôle" if perime else "")
     puces = "".join(f"<span>{html.escape(c)}</span>" for c in _categories(resultat["types_injection"]))
     st.html(
         '<div class="an-page bloque" role="alert">'
         "<strong>Injection de prompt suspectée</strong>"
         "<p>Ce texte contient des passages qui ressemblent à des consignes destinées au LLM. "
-        "Par précaution, il n'a été ni caviardé ni archivé.</p>"
+        f"Par précaution, il n'a été ni {verbe} ni archivé.</p>"
         f'<div class="an-categories">{puces}</div>'
         '<p style="margin-top:14px">Si le document est légitime (une citation, un exemple de sécurité…), '
-        "vous pouvez le caviarder quand même. Le traitement sera signalé dans l'historique "
+        f"vous pouvez le {'analyser' if analyse else 'caviarder'} quand même. Le traitement sera signalé dans l'historique "
         "et le résultat devra être relu.</p>"
         '<p style="margin-top:14px">Chaque document suspect est compté pour votre compte : '
         "à partir de 3, il est signalé aux administrateurs ; à 10, il est désactivé "
@@ -188,22 +190,41 @@ def _volet_confirmation(resultat: dict, perime: bool) -> None:
     )
     col_confirmer, col_annuler, _ = st.columns([1.5, 1, 1], gap="small")
     confirmer = col_confirmer.button(
-        "Caviarder quand même",
+        "Analyser quand même" if analyse else "Caviarder quand même",
         icon=":material/warning:",
         disabled=perime,
         width="stretch",
-        help="Le texte a changé depuis ce contrôle : relancez le caviardage." if perime else None,
+        help="Le texte a changé depuis ce contrôle : relancez le traitement." if perime else None,
     )
     col_annuler.button("Annuler", type="tertiary", on_click=_annuler_confirmation, width="stretch")
     if confirmer:
         try:
-            with st.spinner("Caviardage en cours, le LLM peut prendre quelques secondes…"):
-                reponse = client.caviarder(resultat["contenu"], resultat["strategie"], confirmer=True)
+            if analyse:
+                with st.spinner("Analyse en cours, le LLM peut prendre quelques secondes…"):
+                    reponse = client.analyser(resultat["contenu"], confirmer=True)
+                nouveau = _resultat_analyse(resultat["contenu"], reponse)
+            else:
+                with st.spinner("Caviardage en cours, le LLM peut prendre quelques secondes…"):
+                    reponse = client.caviarder(resultat["contenu"], resultat["strategie"], confirmer=True)
+                nouveau = _resultat_caviardage(resultat["contenu"], resultat["strategie"], reponse)
         except ApiError as erreur:
             session.afficher_erreur_api(erreur)
         else:
-            st.session_state["resultat"] = _resultat_caviardage(resultat["contenu"], resultat["strategie"], reponse)
+            st.session_state["resultat"] = nouveau
             st.rerun()
+
+
+def _resultat_analyse(contenu: str, reponse: dict) -> dict:
+    """Range la réponse de l'API pour une analyse dans l'état de la page."""
+    commun = {
+        "contenu": contenu,
+        "mode_degrade": reponse["mode_degrade"],
+        "types_injection": reponse["types_injection"],
+        "juge": reponse.get("juge"),
+    }
+    if reponse["confirmation_requise"]:
+        return {"type": "confirmation", "origine": "analyse", **commun}
+    return {"type": "analyse", "pii": reponse["pii"], **commun}
 
 
 def _resultat_caviardage(contenu: str, strategie: str, reponse: dict) -> dict:
@@ -365,7 +386,7 @@ analyser_clique = col_analyser.button(
     width="stretch",
     icon=":material/search:",
     help="Repère les données personnelles et les surligne dans le texte, sans le modifier. "
-    "Rien n'est archivé.",
+    "L'analyse est inscrite dans l'historique (jamais le texte).",
 )
 caviarder_clique = col_caviarder.button(
     "Caviarder",
@@ -386,7 +407,7 @@ if analyser_clique or caviarder_clique:
             if analyser_clique:
                 with st.spinner("Analyse en cours, le LLM peut prendre quelques secondes…"):
                     reponse = client.analyser(contenu)
-                st.session_state["resultat"] = {"type": "analyse", "contenu": contenu, **reponse}
+                st.session_state["resultat"] = _resultat_analyse(contenu, reponse)
             else:
                 with st.spinner("Caviardage en cours, le LLM peut prendre quelques secondes…"):
                     reponse = client.caviarder(contenu, strategie)

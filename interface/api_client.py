@@ -51,24 +51,33 @@ class ApiClient:
         reponse = self._requete("GET", "/documents/strategies")
         return self._champ(reponse, "strategies")
 
-    def analyser(self, contenu: str) -> dict:
+    def analyser(self, contenu: str, confirmer: bool = False) -> dict:
         """
-        POST /documents/analyser : PII détectées et état de l'analyse.
+        POST /documents/analyser : PII détectées et état de l'analyse (archivée dans l'historique).
 
         Renvoie un dictionnaire :
-          pii             : liste de PII (clés texte, type, debut, fin, detecteur) ;
-          mode_degrade    : True si le LLM n'a pas répondu (seules les règles ont tourné) ;
-          types_injection : catégories d'injection de prompt repérées (vide sinon).
-        Aucun traitement n'est archivé pour une simple analyse, mais un texte suspect d'injection
-        compte comme une tentative pour le compte (ApiError 403 si le compte vient d'être désactivé).
+          pii                  : liste de PII (clés texte, type, debut, fin, detecteur) ;
+          confirmation_requise : True si le texte ressemble à une injection de prompt et n'a
+                                 pas été analysé (le renvoyer avec confirmer=True pour l'analyser) ;
+          mode_degrade         : True si le LLM n'a pas répondu (seules les règles ont tourné) ;
+          types_injection      : catégories d'injection de prompt repérées (vide sinon) ;
+          avertissements, juge : comme pour caviarder.
+        Comme pour le caviardage, un texte suspect d'injection compte comme une tentative pour le
+        compte (ApiError 403 si le compte vient d'être désactivé).
         """
-        donnees = self._objet(self._requete("POST", "/documents/analyser", json={"contenu": contenu}))
-        if not isinstance(donnees.get("pii"), list):
+        donnees = self._objet(
+            self._requete("POST", "/documents/analyser", json={"contenu": contenu, "confirmer": confirmer})
+        )
+        confirmation = bool(donnees.get("confirmation_requise", False))
+        if not confirmation and not isinstance(donnees.get("pii"), list):
             raise ApiError("Réponse inattendue de l'API.")
         return {
-            "pii": donnees["pii"],
+            "pii": donnees.get("pii") or [],
+            "confirmation_requise": confirmation,
             "mode_degrade": bool(donnees.get("mode_degrade", False)),
             "types_injection": list(donnees.get("types_injection") or []),
+            "avertissements": list(donnees.get("avertissements") or []),
+            "juge": self._verdict_juge(donnees.get("juge")),
         }
 
     def caviarder(self, contenu: str, strategie: str, confirmer: bool = False) -> dict:
