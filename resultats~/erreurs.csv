@@ -1,0 +1,28 @@
+doc_id,erreur,type,texte,detecteur,type_document
+doc_008.txt,faux_negatif,JOB_TITLE,chef du service comptabilité,,cas_limite_cercle3
+doc_012.md,faux_positif,LOCATION,Hauts-de-Saint-Aubin,LLMDetector,compte_rendu_reunion
+doc_018.txt,faux_negatif,JOB_TITLE,instructeur de dossiers,,convocation
+doc_019.txt,faux_positif,JOB_TITLE,président de la République,LLMDetector,cas_limite_cercle3
+doc_019.txt,faux_positif,PERSON,Emmanuel,LLMDetector,cas_limite_cercle3
+doc_019.txt,faux_positif,ORG,Journal officiel,LLMDetector,cas_limite_cercle3
+doc_022.txt,faux_negatif,LOCATION,place Bellecour,,note_courte
+doc_035.txt,faux_negatif,ORG,Trésorerie municipale de Besançon,,courrier_administratif
+doc_038.txt,faux_positif,PERSON,Pierre,LLMDetector,adversarial
+doc_038.txt,faux_positif,PERSON,Paul,LLMDetector,adversarial
+doc_043.txt,faux_negatif,PERSON,Karim Belhadj,,compte_rendu_reunion
+doc_043.txt,faux_negatif,PERSON,Estelle Vacher,,compte_rendu_reunion
+doc_043.txt,faux_negatif,PERSON,Pierre-Yves Le Gall,,compte_rendu_reunion
+doc_043.txt,faux_negatif,PERSON,Dorota Wisniewska,,compte_rendu_reunion
+doc_043.txt,faux_negatif,PERSON,Julien Marceau,,compte_rendu_reunion
+doc_043.txt,faux_negatif,PERSON,Estelle Vacher,,compte_rendu_reunion
+doc_043.txt,faux_negatif,LOCATION,Sablé-sur-Sarthe,,compte_rendu_reunion
+doc_043.txt,faux_negatif,ORG,Communauté de communes du Pays sabolien,,compte_rendu_reunion
+doc_043.txt,faux_negatif,PERSON,Karim Belhadj,,compte_rendu_reunion
+doc_046.txt,faux_negatif,JOB_TITLE,formatrice indépendante,,facture
+doc_050.md,faux_negatif,ORG,tribunal administratif de Strasbourg,,courrier_administratif
+doc_050.md,faux_positif,LOCATION,France,LLMDetector,courrier_administratif
+doc_061.md,faux_negatif,JOB_TITLE,chargé de mission logement,,cas_limite_cercle3
+doc_063.txt,faux_positif,ORG,service contrôle,LLMDetector,adversarial
+doc_064.md,faux_negatif,JOB_TITLE,référent protection des données,,adversarial
+doc_067.txt,faux_negatif,ORG,Service de l'état civil de la mairie de Vierzon,,demande_etat_civil
+doc_068.txt,faux_negatif,JOB_TITLE,directeur général des services,,rapport_tres_long
