@@ -3,6 +3,8 @@ Authentification : aucun échec ne doit se distinguer d'un autre (audit ER3-01).
 Même travail (un calcul bcrypt) et même réponse pour un login inconnu, un compte désactivé,
 un mauvais mot de passe, un mot de passe de plus de 72 octets ou une empreinte invalide.
 """
+import asyncio
+
 import bcrypt
 import pytest
 
@@ -167,3 +169,24 @@ async def test_sans_limiteur_le_nombre_d_essais_n_est_pas_borne():
         assert await service.authentifier("alice", "mauvais") is None
 
     assert (await service.authentifier("alice", "motdepasse123")).login == "alice"
+
+
+class _DepotLent(FakeUserRepository):
+    """Comme une vraie base : la lecture rend la main aux autres requêtes en cours."""
+
+    async def find_by_login(self, login: str) -> User | None:
+        await asyncio.sleep(0)
+        return await super().find_by_login(login)
+
+
+async def test_des_connexions_simultanees_ne_contournent_pas_la_limite(appels_bcrypt):
+    # Toutes les requêtes passent le contrôle du blocage avant qu'un seul échec soit compté :
+    # le blocage doit donc être revérifié après la lecture du compte (audit ER3-02).
+    service = AuthentificationService(_DepotLent([make_user()]), LimiteurConnexions(max_echecs=5))
+
+    resultats = await asyncio.gather(
+        *(service.authentifier("alice", "mauvais") for _ in range(20)), return_exceptions=True
+    )
+
+    assert sum(isinstance(r, TropDeTentativesError) for r in resultats) == 15
+    assert len(appels_bcrypt) == 5  # seulement 5 mots de passe ont réellement été testés

@@ -66,6 +66,13 @@ class AuthentificationService:
 
         user = await self.__user_repository.find_by_login(login)
 
+        # Des requêtes simultanées ont toutes passé le contrôle ci-dessus avant qu'un échec soit
+        # compté : on le refait ici, juste avant le calcul bcrypt. Entre ce contrôle et
+        # l'enregistrement de l'échec, il n'y a aucune attente : une requête ne peut plus être
+        # dépassée par une autre.
+        if self.__limiteur is not None:
+            self.__limiteur.verifier(login)
+
         empreinte = user.password_hash if user is not None else _EMPREINTE_FACTICE
         mot_de_passe_valide = self.__verifier_mot_de_passe(mot_de_passe, empreinte)
 
