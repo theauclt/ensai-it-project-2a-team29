@@ -5,6 +5,8 @@ Chaque envoi d'un document dans lequel le filtre d'injection repère des motifs 
 comme une tentative pour le compte qui l'a envoyé, même si c'est le même document qu'avant.
 Seule exception : un document bloqué puis renvoyé avec confirmation (« Caviarder quand même »)
 est un seul envoi, il ne compte pas double.
+Un document que le filtre laisse passer mais que le juge LLM signale comme une tentative de
+manipulation compte aussi comme une tentative (une seule, même si le filtre l'a aussi repéré).
 
 - À partir de SEUIL_ALERTE tentatives, le compte est signalé aux administrateurs
   (« comportement dangereux » dans la liste des comptes).

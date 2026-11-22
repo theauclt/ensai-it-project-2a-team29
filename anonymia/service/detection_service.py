@@ -140,6 +140,7 @@ class DetectionService:
         await self._archiver(
             content, user_id, strategy_name, spans, injection_types, detectors_ok, verdict_juge
         )
+        await self._signaler_verdict_juge(content, user_id, injection_types, verdict_juge)
         return AnonymizationResult(
             document=anonymized,
             types_injection=injection_types,
@@ -167,6 +168,7 @@ class DetectionService:
         await self._archiver(
             content, user_id, STRATEGIE_ANALYSE, spans, injection_types, detectors_ok, verdict_juge
         )
+        await self._signaler_verdict_juge(content, user_id, injection_types, verdict_juge)
         return AnalysisResult(
             spans=spans,
             types_injection=injection_types,
@@ -198,6 +200,28 @@ class DetectionService:
             self._run_detectors(content), self._run_judge(content)
         )
         return self._merge_spans(spans), injection_types, detectors_ok, verdict_juge
+
+    async def _signaler_verdict_juge(
+        self,
+        content: str,
+        user_id: int,
+        injection_types: list[str],
+        verdict_juge: InjectionVerdict | None,
+    ) -> None:
+        """
+        Compte une tentative d'injection repérée par le juge LLM mais pas par les regex.
+
+        Si le filtre regex a déjà repéré le document, la tentative est déjà comptée : on ne la
+        compte pas une seconde fois. Appelée après l'archivage : même si le compte atteint le
+        seuil de désactivation (CompteDesactiveError), l'envoi au LLM reste tracé dans
+        l'historique, et le document n'est pas renvoyé.
+        """
+        if self._surveillance is None or injection_types:
+            return
+        statut_juge, type_juge = metadonnees_juge(verdict_juge)
+        if statut_juge != "detected":
+            return
+        await self._surveillance.signaler(user_id, _empreinte(content), [type_juge or "other"])
 
     async def _archiver(
         self,
