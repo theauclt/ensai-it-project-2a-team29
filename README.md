@@ -123,7 +123,9 @@ No real database or LLM needed. Before every commit, both commands must pass.
     python -m scripts.evaluer_corpus corpus-test --llm      # with the LLM
     python -m scripts.evaluer_juge corpus-test              # LLM injection judge (68 LLM calls)
 
-The tables (`metriques.md`, `metriques_juge.md`) are written in the `--sortie` folder.
+The tables (`metriques.md`, `metriques_juge.md`) are written in the `--sortie` folder, and the figures
+for the report (confusion matrix, precision/recall...) in its `graphiques/` subfolder (needs
+`pip install matplotlib`).
 
 ## 10. Security: what you need to know
 
@@ -171,5 +173,4 @@ Give the route and body sent, the code and response received, the message in the
 terminal, and whether the LLM was on or off. Never paste a real document, a password, an API key
 or the contents of `.env`.
 
-The detailed documentation (judge, confidence, PII types, dashboard, measured results) is in
-`anonymia/doc.txt`.
+For the architecture and how to extend the backend, see the backend README.
