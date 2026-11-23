@@ -1,3 +1,4 @@
+"""Accès PostgreSQL aux tentatives d'injection (implémentation de TentativeInjectionRepository)."""
 from datetime import datetime
 
 from psycopg_pool import AsyncConnectionPool

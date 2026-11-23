@@ -1,3 +1,4 @@
+"""Accès PostgreSQL à l'historique des traitements (implémentation de ArchiveRepository)."""
 from psycopg_pool import AsyncConnectionPool
 
 from ..service.business_objects.audit_entry import AuditEntry
@@ -10,10 +11,11 @@ class PostgresArchiveRepository(ArchiveRepository):
     """
 
     def __init__(self, pool: AsyncConnectionPool) -> None:
+        """pool : pool de connexions asynchrone partagé avec les autres dépôts."""
         self.__pool = pool
 
     async def save(self, entry: AuditEntry) -> None:
-        # pour enregistrer un traitemen† dans la bdd
+        """Enregistre un traitement dans la table traitements (jamais le contenu du document)."""
         query = """
             INSERT INTO traitements (
                 user_id, date_traitement, hash_document,
@@ -42,7 +44,7 @@ class PostgresArchiveRepository(ArchiveRepository):
             )
 
     async def find_by_user(self, user_id: int) -> list[AuditEntry]:
-        # pour quand un superviseur veut filtrer par user
+        """Renvoie les traitements d'un utilisateur."""
         query = "SELECT * FROM traitements WHERE user_id = %s"
         async with self.__pool.connection() as conn:
             cur = await conn.execute(query, (user_id,))
@@ -50,7 +52,7 @@ class PostgresArchiveRepository(ArchiveRepository):
         return [self._to_entry(row) for row in rows]
 
     async def find_all(self) -> list[AuditEntry]:
-        # pour voir toute l'historoque complet
+        """Renvoie tout l'historique des traitements."""
         query = "SELECT * FROM traitements"
         async with self.__pool.connection() as conn:
             cur = await conn.execute(query)
@@ -58,9 +60,7 @@ class PostgresArchiveRepository(ArchiveRepository):
         return [self._to_entry(row) for row in rows]
 
     def _to_entry(self, row: dict) -> AuditEntry:
-        # methode privée
-        # utilisée en interne par find_by_user et find_all seulement
-        # Elle sert de traducteur : une ligne renvoyée par PostgreSQL est juste un dictionnaire brut
+        """Transforme une ligne (dictionnaire brut renvoyé par PostgreSQL) en AuditEntry."""
         return AuditEntry(
             id=row["id"],
             user_id=row["user_id"],
