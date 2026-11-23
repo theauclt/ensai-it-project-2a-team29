@@ -33,6 +33,7 @@ class TropDeTentativesError(Exception):
     """Trop d'échecs de connexion : le login est bloqué pendant `secondes` secondes."""
 
     def __init__(self, secondes: int) -> None:
+        """secondes : durée restante du blocage."""
         super().__init__(f"Trop de tentatives de connexion, réessayez dans {secondes} secondes")
         self.secondes = secondes
 
@@ -55,6 +56,7 @@ class LimiteurConnexions:
         horloge: Callable[[], float] = time.monotonic,
         max_logins: int = MAX_LOGINS_SUIVIS,
     ) -> None:
+        """max_logins : nombre maximal de logins suivis en mémoire (voir les autres paramètres ci-dessus)."""
         if max_echecs < 1:
             raise ValueError("max_echecs doit valoir au moins 1")
         self._max_echecs = max_echecs
@@ -103,9 +105,11 @@ class LimiteurConnexions:
 
     @staticmethod
     def _cle(login: str) -> str:
+        """Clé de suivi d'un login (tronquée pour borner la mémoire)."""
         return login[:LONGUEUR_MAX_LOGIN]
 
     def _oublier_les_vieux_echecs(self, echecs: deque[float], maintenant: float) -> None:
+        """Retire les échecs plus vieux que la fenêtre de comptage."""
         while echecs and maintenant - echecs[0] > self._fenetre:
             echecs.popleft()
 

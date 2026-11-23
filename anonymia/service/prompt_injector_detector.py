@@ -1,3 +1,4 @@
+"""Filtre d'injection de prompt : repère des formulations connues dans un document."""
 import base64
 import binascii
 import logging
@@ -218,6 +219,7 @@ class PromptInjectionDetector:
     PATTERNS: ClassVar[dict[str, list[re.Pattern]]] = _PATTERNS
 
     def __init__(self):
+        """Prépare le journal de sécurité (type et date des alertes, jamais le contenu)."""
         self.logger = logging.getLogger("security")
         self.logger.setLevel(logging.INFO)
 
@@ -241,6 +243,7 @@ class PromptInjectionDetector:
         return detected_types
 
     def _match(self, normalized_text: str) -> list[str]:
+        """Catégories dont au moins un motif apparaît dans le texte normalisé."""
         return [
             category
             for category, patterns in self.PATTERNS.items()

@@ -1,3 +1,5 @@
+"""Hachage des mots de passe (bcrypt)."""
+
 import bcrypt
 
 MOT_DE_PASSE_MIN = 8

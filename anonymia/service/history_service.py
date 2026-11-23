@@ -1,3 +1,4 @@
+"""Consultation de l'historique des traitements (SUPERVISOR et ADMIN)."""
 from datetime import UTC, datetime
 
 from .business_objects.audit_entry import AuditEntry
@@ -17,6 +18,7 @@ class HistoryService:
     ROLES_AUTORISES = frozenset({"SUPERVISOR", "ADMIN"})
 
     def __init__(self, archive_repo: ArchiveRepository, user_repo: UserRepository):
+        """archive_repo : historique des traitements ; user_repo : pour retrouver le login."""
         self._archive_repo = archive_repo
         self._user_repo = user_repo
 

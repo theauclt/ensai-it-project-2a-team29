@@ -1,3 +1,5 @@
+"""Connexion des utilisateurs : vérification du mot de passe et limitation des essais."""
+
 import logging
 
 import bcrypt

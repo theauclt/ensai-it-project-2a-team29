@@ -1,3 +1,4 @@
+"""Gestion des comptes par les administrateurs (création, rôle, activation, suppression)."""
 from .business_objects.user import User
 from .interfaces.user_repository import UserRepository
 from .mots_de_passe import MOT_DE_PASSE_MIN, hasher_mot_de_passe
@@ -39,6 +40,7 @@ class AdminService:
         return await self._annoter(await self._user_repo.find_all())
 
     async def creer(self, requester: User, login: str, mot_de_passe: str, role: str) -> User:
+        """Crée un compte (login libre, mot de passe assez long, rôle connu)."""
         self._verifier_admin(requester)
         login = login.strip()
         role = self._valider_role(role)
@@ -56,6 +58,7 @@ class AdminService:
         return cree
 
     async def changer_role(self, requester: User, user_id: int, role: str) -> User:
+        """Change le rôle d'un compte ; on ne peut pas retirer le dernier ADMIN ni son propre rôle."""
         self._verifier_admin(requester)
         role = self._valider_role(role)
         cible = await self._trouver(user_id)
@@ -71,6 +74,7 @@ class AdminService:
         return await self._trouver(user_id)
 
     async def definir_activation(self, requester: User, user_id: int, est_active: bool) -> User:
+        """Active ou désactive un compte ; on ne peut pas désactiver le sien ni le dernier ADMIN."""
         self._verifier_admin(requester)
         cible = await self._trouver(user_id)
 
@@ -85,6 +89,7 @@ class AdminService:
         return await self._trouver(user_id)
 
     async def supprimer(self, requester: User, user_id: int) -> None:
+        """Supprime un compte ; on ne peut pas supprimer le sien ni le dernier ADMIN."""
         self._verifier_admin(requester)
         cible = await self._trouver(user_id)
 
@@ -100,12 +105,13 @@ class AdminService:
 
     @staticmethod
     def _verifier_admin(requester: User) -> None:
-        # Défense en profondeur : le contrôle est ici, pas seulement dans la route
+        """Refuse si le demandeur n'est pas ADMIN (le contrôle est ici, pas seulement dans la route)."""
         if requester.role != "ADMIN":
             raise PermissionError("La gestion des comptes est réservée aux administrateurs")
 
     @staticmethod
     def _valider_role(role: str) -> str:
+        """Renvoie le rôle en majuscules, ou lève DonneeInvalideError s'il est inconnu."""
         role = role.strip().upper()
         if role not in ROLES:
             raise DonneeInvalideError(f"Rôle inconnu. Rôles possibles : {', '.join(ROLES)}")
