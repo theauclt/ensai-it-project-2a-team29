@@ -241,6 +241,7 @@ def tableau_de_bord(traitements: list[dict], logins: dict[int, str], tz: tzinfo)
             sans_llm += 1
 
     def trier(repartition: dict[str, int]) -> dict[str, int]:
+        """Trie une répartition par nombre décroissant, puis par nom."""
         return dict(sorted(repartition.items(), key=lambda element: (-element[1], element[0])))
 
     detail = [

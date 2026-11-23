@@ -62,14 +62,17 @@ def _nombre(n: int) -> str:
 
 
 def _pluriel(n: int, mot: str) -> str:
+    """« 1 mot » ou « 2 mots » selon le nombre."""
     return f"{_nombre(n)} {mot}{'s' if n > 1 else ''}"
 
 
 def _categories(types_injection: list[str]) -> list[str]:
+    """Libellés lisibles des types d'injection repérés."""
     return [LIBELLES_INJECTION.get(t, t) for t in types_injection]
 
 
 def _donnees(n: int) -> str:
+    """« 1 donnée personnelle » ou « 2 données personnelles » selon le nombre."""
     s = "s" if n > 1 else ""
     return f"{_nombre(n)} donnée{s} personnelle{s}"
 
@@ -101,10 +104,12 @@ def _importer_fichier() -> None:
 
 
 def _inserer_exemple() -> None:
+    """Remplit la zone de texte avec le texte d'exemple."""
     st.session_state["contenu"] = EXEMPLE
 
 
 def _annuler_confirmation() -> None:
+    """Abandonne la demande de confirmation : le document suspect n'est pas envoyé."""
     st.session_state.pop("resultat", None)
 
 

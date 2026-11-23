@@ -22,6 +22,7 @@ class ApiError(Exception):
     """Erreur de l'API, avec un message lisible à afficher tel quel à l'utilisateur."""
 
     def __init__(self, message: str, status_code: int | None = None):
+        """message : texte affiché à l'utilisateur ; status_code : code HTTP de la réponse, s'il y en a un."""
         super().__init__(message)
         self.status_code = status_code
 

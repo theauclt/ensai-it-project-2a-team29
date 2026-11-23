@@ -17,6 +17,7 @@ def _infobulle(colonne: str, mesure: str = "Traitements") -> list[alt.Tooltip]:
 
 
 def _donnees(repartition: dict[str, int], colonne: str, mesure: str = "Traitements") -> list[dict]:
+    """Transforme une répartition {catégorie: nombre} en lignes pour le graphique, avec la part en %."""
     total = sum(repartition.values()) or 1
     return [
         {colonne: nom, mesure: n, "Part": f"{round(100 * n / total)} %"}
