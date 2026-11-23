@@ -27,6 +27,8 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "ruff",
+    # graphiques de scripts/evaluer_corpus.py (rapport)
+    "matplotlib",
 ]
 # Détecteur NER local (facultatif, activé par NER_ENABLED=true). Le modèle de langue français
 # n'est pas un paquet pip ordinaire : python -m spacy download fr_core_news_lg
