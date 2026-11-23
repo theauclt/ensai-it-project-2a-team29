@@ -1,3 +1,5 @@
+"""Schémas Pydantic des requêtes et des réponses de l'API."""
+
 from datetime import datetime
 from typing import Literal
 

@@ -1,9 +1,12 @@
+"""Création et mise à jour du schéma PostgreSQL (relançable sans rien effacer)."""
+
 from dotenv import load_dotenv
 
 from ..persistence.dao.db_connexion import connexion_synchrone
 
 
 def init_db():
+    """Crée les tables (users, traitements, tentatives_injection) et ajoute les colonnes manquantes."""
     # Le bloc `with connection` valide tout à sa sortie, ou annule tout en cas d'erreur
     with connexion_synchrone() as connection, connection.cursor() as cursor:
         cursor.execute("""

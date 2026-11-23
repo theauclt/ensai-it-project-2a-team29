@@ -1,3 +1,5 @@
+"""Routes de traitement des documents : caviardage, analyse, liste des stratégies."""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..service.business_objects.injection_verdict import metadonnees_juge

@@ -1,3 +1,5 @@
+"""Route de consultation de l'historique (SUPERVISOR et ADMIN)."""
+
 from datetime import UTC, date, datetime, time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,6 +15,7 @@ router = APIRouter(prefix="/journaux", tags=["Journalisation"])
 
 
 def _en_utc(date: datetime) -> datetime:
+    """Rend une date comparable : sans fuseau, on la considère en UTC."""
     return date if date.tzinfo is not None else date.replace(tzinfo=UTC)
 
 

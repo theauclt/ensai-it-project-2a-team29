@@ -1,3 +1,5 @@
+"""Route de connexion (obtention du jeton JWT)."""
+
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, status

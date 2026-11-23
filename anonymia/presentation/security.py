@@ -1,3 +1,5 @@
+"""Jetons JWT et contrôle des rôles."""
+
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -19,6 +21,7 @@ _bearer = HTTPBearer(auto_error=False)
 
 
 def _secret() -> str:
+    """Lit JWT_SECRET ; l'API refuse de démarrer si elle manque ou fait moins de 32 caractères."""
     secret = os.environ.get("JWT_SECRET")
     if not secret:
         raise RuntimeError("Variable d'environnement manquante : JWT_SECRET")
@@ -78,4 +81,4 @@ async def get_current_user(
     user = await auth.utilisateur_actif(user_id)
     if user is None:
         raise non_authentifie
-    return user
+    return userDocstrings : main, init_db et présentation

@@ -1,4 +1,5 @@
 """
+
 Point d'entrée de l'API.
 
 Lancement (depuis la racine du dépôt) :
@@ -28,6 +29,7 @@ from .presentation.security import verifier_secret
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Au démarrage : ouvre le pool, construit les services ; à l'arrêt : ferme tout."""
     # Échec immédiat au démarrage plutôt qu'à la première connexion
     verifier_secret()
 
@@ -74,4 +76,5 @@ for router in routers:
 
 @app.get("/", include_in_schema=False)
 async def accueil():
+    """Redirige la page d'accueil vers la documentation interactive."""
     return RedirectResponse("/docs")

@@ -1,3 +1,5 @@
+"""Regroupe les routeurs de l'API."""
+
 from .routes_admin import router as admin_router
 from .routes_auth import router as auth_router
 from .routes_documents import router as documents_router

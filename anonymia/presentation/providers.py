@@ -1,4 +1,5 @@
 """
+
 Fournisseurs de services pour les routes (Depends).
 
 Les services sont construits une seule fois au démarrage (voir main.py) et
@@ -13,16 +14,20 @@ from ..service.history_service import HistoryService
 
 
 def get_detection_service(request: Request) -> DetectionService:
+    """Service de détection construit au démarrage."""
     return request.app.state.detection_service
 
 
 def get_history_service(request: Request) -> HistoryService:
+    """Service d'historique construit au démarrage."""
     return request.app.state.history_service
 
 
 def get_auth_service(request: Request) -> AuthentificationService:
+    """Service d'authentification construit au démarrage."""
     return request.app.state.auth_service
 
 
 def get_admin_service(request: Request) -> AdminService:
+    """Service d'administration des comptes construit au démarrage."""
     return request.app.state.admin_service

@@ -1,3 +1,5 @@
+"""Routes d'administration des comptes (ADMIN)."""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..service.admin_service import (
