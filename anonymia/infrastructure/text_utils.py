@@ -1,3 +1,5 @@
+"""Fonctions de normalisation de texte partagées par les stratégies."""
+
 import re
 import unicodedata
 

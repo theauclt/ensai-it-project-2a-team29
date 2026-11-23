@@ -1,3 +1,5 @@
+"""Juge LLM d'injection de prompt : informe, ne bloque jamais."""
+
 import json
 import logging
 
@@ -106,6 +108,7 @@ class LLMInjectionJudge(InjectionJudge):
         client: httpx.AsyncClient,
         model: str,
     ):
+        """client : client HTTP asynchrone partagé ; model : nom du modèle du juge."""
         self.client = client
         self.model = model
 

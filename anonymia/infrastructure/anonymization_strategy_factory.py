@@ -1,9 +1,13 @@
+"""Fabrique des stratégies d'anonymisation."""
+
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 from .masking_strategy import MaskingStrategy
 from .pseudonymization_strategy import PseudonymizationStrategy
 
 
 class AnonymizationStrategyFactory:
+    """Construit la stratégie d'anonymisation demandée par son nom (masking ou pseudonymization)."""
+
     STRATEGIES = ("masking", "pseudonymization")
 
     @classmethod

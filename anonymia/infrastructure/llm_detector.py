@@ -1,3 +1,5 @@
+"""Détecteur de PII par LLM (noms, lieux, organisations, adresses, dates de naissance, postes)."""
+
 import json
 import logging
 import re
@@ -148,6 +150,7 @@ class LLMDetector(PIIDetector):
     # ------------------------------------------------------------------
 
     async def _call_llm(self, content: str) -> str:
+        """Envoie le document au LLM et renvoie sa réponse brute (JSON attendu)."""
         # Le document ne doit pas pouvoir fermer lui-même la balise
         # de délimitation.
         safe_content = content.replace("</document>", "</ document>")

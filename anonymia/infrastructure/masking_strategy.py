@@ -1,3 +1,5 @@
+"""Stratégie de masquage : les PII deviennent des marqueurs comme [EMAIL_1]."""
+
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 from .text_utils import normalize_key
@@ -21,6 +23,7 @@ class MaskingStrategy(AnonymisationStrategy):
     }
 
     def apply(self, content: str, spans: list[PIISpan]) -> str:
+        """Remplace chaque PII par un marqueur du type [EMAIL_1] (même valeur, même marqueur)."""
         # Mémorise les correspondances pour qu'une même PII garde le même marqueur
         replacements = {}
 

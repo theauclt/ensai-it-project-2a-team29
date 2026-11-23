@@ -1,3 +1,5 @@
+"""Stratégie de pseudonymisation : les PII deviennent des valeurs fictives cohérentes."""
+
 from ..service.business_objects.pii_span import PIISpan
 from ..service.interfaces.anonymisation_strategy import AnonymisationStrategy
 from .text_utils import normalize_key
@@ -44,6 +46,7 @@ class PseudonymizationStrategy(AnonymisationStrategy):
     }
 
     def apply(self, content: str, spans: list[PIISpan]) -> str:
+        """Remplace chaque PII par un pseudonyme réaliste, identique pour une même valeur."""
         # Mémorise les correspondances pour qu'une même PII garde le même pseudonyme
         replacements = {}
 

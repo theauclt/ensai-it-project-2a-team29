@@ -1,3 +1,5 @@
+"""Détecteur de PII par expressions régulières (formats fixes)."""
+
 import re
 
 import phonenumbers
@@ -77,6 +79,7 @@ class RegexDetector(PIIDetector):
     }
 
     async def detect(self, content: str) -> list[PIISpan]:
+        """Repère e-mails, téléphones, NIR, IBAN et plaques par expressions régulières."""
         spans: list[PIISpan] = []  # liste des résultats obtenus
         # on parcourt chaque type de PII connu
         for pii_type, pattern in self.PATTERNS.items():
@@ -194,6 +197,7 @@ class RegexDetector(PIIDetector):
         return int(converted) % 97 == 1
 
     def _is_valid_phonenumber(self, phonenumber: str) -> bool:
+        """Vrai si la chaîne est un numéro de téléphone français valide (bibliothèque phonenumbers)."""
         phonenumber = re.sub(r"[\s().-]", "", phonenumber)
         try:
             parsed_number = phonenumbers.parse(phonenumber, "FR")

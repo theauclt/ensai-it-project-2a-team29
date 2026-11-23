@@ -1,3 +1,5 @@
+"""Détecteur de PII par NER spaCy (facultatif)."""
+
 # Installation (dépendance facultative, déclarée dans pyproject.toml, groupe "ner") :
 #   pip install -e ".[ner]"
 #   python -m spacy download fr_core_news_lg
@@ -59,6 +61,7 @@ class SpacyDetector(PIIDetector):
         return cls(nlp)
 
     async def detect(self, content: str) -> list[PIISpan]:
+        """Repère personnes, lieux et organisations avec le modèle spaCy (hors boucle d'événements)."""
         if not content.strip():
             return []
 
@@ -83,5 +86,6 @@ class SpacyDetector(PIIDetector):
         return spans
 
     def _analyser(self, content: str):
+        """Passe le texte dans le modèle spaCy (un seul appel à la fois : le verrou protège le modèle)."""
         with self._verrou:
             return self._nlp(content)
