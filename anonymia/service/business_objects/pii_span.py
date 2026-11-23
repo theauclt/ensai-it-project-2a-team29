@@ -1,3 +1,5 @@
+"""Occurrence de PII détectée dans un document."""
+
 class PIISpan:
     """
     Représente une occurrence de PII détectée dans un document :

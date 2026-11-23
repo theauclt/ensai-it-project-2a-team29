@@ -1,3 +1,5 @@
+"""Contrat des détecteurs de PII."""
+
 from abc import ABC, abstractmethod
 
 from ..business_objects.pii_span import PIISpan

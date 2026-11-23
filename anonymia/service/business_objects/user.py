@@ -1,3 +1,5 @@
+"""Compte utilisateur."""
+
 from datetime import datetime
 
 

@@ -1,3 +1,5 @@
+"""Contrat de persistance des utilisateurs."""
+
 from abc import ABC, abstractmethod
 
 from ..business_objects.user import User

@@ -1,3 +1,5 @@
+"""Contrat de persistance des tentatives d'injection."""
+
 from abc import ABC, abstractmethod
 from datetime import datetime
 

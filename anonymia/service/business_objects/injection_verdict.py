@@ -1,3 +1,5 @@
+"""Verdict du juge LLM sur une injection de prompt."""
+
 from dataclasses import dataclass
 from typing import Literal, get_args
 
@@ -44,4 +46,3 @@ def metadonnees_juge(verdict: InjectionVerdict | None) -> tuple[str | None, str 
     if statut != "detected":
         return statut, None
     return statut, verdict.injection_type if verdict.injection_type in INJECTION_TYPES else "other"
-

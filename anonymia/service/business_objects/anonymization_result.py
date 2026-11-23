@@ -1,3 +1,5 @@
+"""Résultat du caviardage d'un document."""
+
 from dataclasses import dataclass, field
 
 from .injection_verdict import InjectionVerdict
@@ -5,6 +7,8 @@ from .injection_verdict import InjectionVerdict
 
 @dataclass
 class AnonymizationResult:
+    """Résultat d'un caviardage : document, injections repérées, détecteurs, verdict du juge."""
+
     document: str | None
     types_injection: list[str] = field(default_factory=list)
     confirmation_requise: bool = False

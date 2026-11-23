@@ -1,3 +1,5 @@
+"""Contrat de persistance de l'historique."""
+
 from abc import ABC, abstractmethod
 
 from ..business_objects.audit_entry import AuditEntry

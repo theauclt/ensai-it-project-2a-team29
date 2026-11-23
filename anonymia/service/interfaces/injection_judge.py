@@ -1,3 +1,5 @@
+"""Contrat du juge d'injection."""
+
 from abc import ABC, abstractmethod
 
 from ..business_objects.injection_verdict import InjectionVerdict

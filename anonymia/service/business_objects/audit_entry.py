@@ -1,3 +1,5 @@
+"""Entrée d'audit : trace d'un traitement, sans le contenu du document."""
+
 from datetime import datetime
 
 
@@ -24,6 +26,7 @@ class AuditEntry:
         juge_type: str | None = None,
         id: int | None = None,
     ) -> None:
+        """Une entrée par traitement : seules des métadonnées sont conservées."""
         self.id = id
         self.user_id = user_id
         self.date_traitement = date_traitement

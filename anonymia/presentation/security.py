@@ -81,4 +81,4 @@ async def get_current_user(
     user = await auth.utilisateur_actif(user_id)
     if user is None:
         raise non_authentifie
-    return userDocstrings : main, init_db et présentation
+    return user

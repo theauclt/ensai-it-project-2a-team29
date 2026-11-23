@@ -1,3 +1,5 @@
+"""Résultat de l'analyse d'un document (PII repérées, sans caviardage)."""
+
 from dataclasses import dataclass, field
 
 from .injection_verdict import InjectionVerdict

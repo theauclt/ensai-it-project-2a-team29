@@ -1,3 +1,5 @@
+"""Service de détection et d'anonymisation des documents."""
+
 import asyncio
 import bisect
 import hashlib
@@ -50,6 +52,7 @@ class DetectionService:
         injection_judge: InjectionJudge | None = None,
         surveillance: SurveillanceInjections | None = None,
     ):
+        """Les dépendances sont des interfaces ; judge et surveillance sont facultatifs."""
         self._detectors = detectors
         self._strategy_factory = strategy_factory
         self._archive_repo = archive_repo
@@ -121,6 +124,7 @@ class DetectionService:
         user_id: int,
         confirmed: bool = False,
     ) -> AnonymizationResult:
+        """Caviarde un document : filtre d'injection, détection, stratégie, archivage."""
         strategy = self._strategy_factory.get_strategy(strategy_name)
 
         # Filtre d'injection (et comptage des tentatives) avant les détecteurs, donc avant le
