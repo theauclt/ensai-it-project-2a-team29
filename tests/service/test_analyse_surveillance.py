@@ -102,7 +102,7 @@ async def test_analyse_bloquee_puis_confirmee_compte_une_seule_fois(ctx):
 
 
 async def test_dixieme_analyse_suspecte_desactive_le_compte_sans_rien_traiter(ctx):
-    service, tentatives, archive, users = ctx
+    service, _tentatives, archive, users = ctx
     for i in range(9):
         await service.analyse(f"{SUSPECT} {i}", user_id=1)
 

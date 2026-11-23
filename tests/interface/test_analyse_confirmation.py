@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "interface"))
 
-from api_client import ApiClient, ApiError  # noqa: E402
+from api_client import ApiClient, ApiError
 
 
 def client_avec(reponse: httpx.Response, envoyes: list):
